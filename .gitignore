@@ -1,0 +1,19 @@
+# Credentials — never commit
+.env
+ 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+ 
+# Lambda deployment artifacts
+package/
+*.zip
+ 
+# Virtual environments
+.venv/
+venv/
+env/
