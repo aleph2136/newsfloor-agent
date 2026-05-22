@@ -47,9 +47,12 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Bedrock model config
     # Haiku for most nodes; can swap individual nodes to Sonnet if needed.
+    # We use Amazon Nova Pro and Meta Llama 3.3 for the supervisors to avoid Claude monoculture.
     # -------------------------------------------------------------------------
     bedrock_model_haiku:  str = Field(default="bedrock/invoke/us.anthropic.claude-haiku-4-5-20251001")
     bedrock_model_sonnet: str = Field(default="bedrock/anthropic.claude-sonnet-4-6-v1")
+    bedrock_model_input_supervisor:  str = Field(default="bedrock/us.amazon.nova-pro-v1:0")
+    bedrock_model_output_supervisor: str = Field(default="bedrock/us.meta.llama3-3-70b-instruct-v1:0")
  
     # -------------------------------------------------------------------------
     # Pipeline tuning parameters

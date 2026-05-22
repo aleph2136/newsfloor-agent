@@ -23,12 +23,15 @@ class NodeName(str, Enum):
     Used in gate decisions and retry instructions so nothing is
     stringly typed.
     """
-    TOPIC     = "topic"
-    FETCH     = "fetch"
-    SCORING   = "scoring"
-    SYNTHESIS = "synthesis"
-    DELIVERY  = "delivery"
-    TREND     = "trend"
+    LOAD_CONTEXT      = "load_context"
+    TOPIC             = "topic"
+    FETCH             = "fetch"
+    SCORING           = "scoring"
+    INPUT_SUPERVISOR  = "input_supervisor"
+    SYNTHESIS         = "synthesis"
+    OUTPUT_SUPERVISOR = "output_supervisor"
+    DELIVERY          = "delivery"
+    TREND             = "trend"
 
 class RetryReasonCode(str, Enum):
     """
@@ -42,6 +45,7 @@ class RetryReasonCode(str, Enum):
     SOURCE_FETCH_FAILURE   = "source_fetch_failure"
     BELOW_SCORE_THRESHOLD  = "below_score_threshold"
     TREND_WRITE_FAILURE    = "trend_write_failure"
+    DIGEST_INSUFFICIENT    = "digest_insufficient"
 
 class TrendStrength(str, Enum):
     """
@@ -106,7 +110,7 @@ class RetryInstruction(BaseModel):
     Contains a reason code and a parameter adjustment dict — no free text.
     The receiving node pattern-matches on reason_code to adjust its behavior.
     """
-    node:                NodeName
+    target_node:         NodeName = Field(alias="node")
     reason_code:         RetryReasonCode
     parameter_adjustment: dict = Field(
         default_factory=dict,
@@ -116,3 +120,25 @@ class RetryInstruction(BaseModel):
             "Never contains natural language instructions."
         )
     )
+
+    model_config = {
+        "populate_by_name": True
+    }
+
+
+class SupervisorRoute(str, Enum):
+    """Routing outcomes for supervisors."""
+    PROCEED = "proceed"
+    REWORK  = "rework"
+
+
+class SupervisorDecision(BaseModel):
+    """
+    The outcome of a supervisor's holistic quality gate evaluation.
+    Determines whether the graph proceeds or loops back for rework.
+    """
+    supervisor:        NodeName
+    route:             SupervisorRoute
+    rework_count:      int
+    rationale:         str
+    retry_instruction: RetryInstruction | None = None
