@@ -37,41 +37,18 @@ from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
  
 from config import settings
+from config_loader import load_topics
 from contracts.nodes import (
     TopicTaskInput,
     TopicTaskResult,
 )
 from contracts.primitives import RetryReasonCode
- 
+
 logger = logging.getLogger(__name__)
- 
-# ---------------------------------------------------------------------------
-# Topic rotation list
-# The full set of topics the system rotates through.
-# Add topics here as the field evolves — the strategist selects from this list.
-# ---------------------------------------------------------------------------
-AVAILABLE_TOPICS = [
-    "multi-agent orchestration patterns",
-    "agent observability and tracing",
-    "human-in-the-loop agent design",
-    "agentic system governance and guardrails",
-    "agent memory architectures",
-    "tool use and function calling patterns",
-    "supervisor and critic agent patterns",
-    "agent evaluation and testing strategies",
-    "structured outputs and contract-driven agents",
-    "agentic workflow reliability and error recovery",
-    "LLM routing and model selection in pipelines",
-    "agent state management across long-running tasks",
-    "retrieval-augmented generation in agentic systems",
-    "agent security and prompt injection defense",
-    "cost and latency optimization in agentic pipelines",
-    "emerging agentic frameworks comparison",
-    "real-world agentic system case studies",
-    "agent deployment patterns on cloud infrastructure",
-    "ethical considerations in autonomous agent design",
-    "agentic systems for developer tooling and platforms",
-]
+
+# Topic rotation list — loaded from newsfloor/config_data/topics.json.
+# Edit that file to add, remove, or reorder topics without changing Python code.
+AVAILABLE_TOPICS = load_topics()
  
  
 def run(task_input: TopicTaskInput) -> TopicTaskResult:

@@ -64,7 +64,10 @@ class Settings(BaseSettings):
     fetch_max_articles:  int   = Field(default=10)
  
     # Scoring node
-    score_threshold:     float = Field(default=0.5)   # minimum combined score to pass
+    score_threshold:            float = Field(default=0.5)   # minimum combined score to pass
+    scoring_relevance_weight:   float = Field(default=0.65)  # weight for content relevance in combined score
+    scoring_reputation_weight:  float = Field(default=0.35)  # weight for source reputation in combined score
+    scoring_default_reputation: float = Field(default=0.5)   # fallback reputation for unknown sources
  
     # Orchestrator gate
     max_retries_per_node: int  = Field(default=2)     # failures before degraded mode

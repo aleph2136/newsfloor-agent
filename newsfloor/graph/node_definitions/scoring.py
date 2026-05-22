@@ -59,12 +59,10 @@ from contracts.primitives import ArticleRaw, ArticleScored, RetryReasonCode
 
 logger = logging.getLogger(__name__)
 
-# Default reputation for domains not yet in the reputation map.
-# Neutral start — no evidence for or against.
-DEFAULT_REPUTATION = 0.5
-
-RELEVANCE_WEIGHT  = 0.65
-REPUTATION_WEIGHT = 0.35
+# Scoring weights and defaults — configurable via env vars in config.py.
+DEFAULT_REPUTATION = settings.scoring_default_reputation
+RELEVANCE_WEIGHT   = settings.scoring_relevance_weight
+REPUTATION_WEIGHT  = settings.scoring_reputation_weight
 
 
 def run(task_input: ScoringTaskInput) -> ScoringTaskResult:

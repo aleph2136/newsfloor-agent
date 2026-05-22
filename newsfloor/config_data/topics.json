@@ -1,0 +1,22 @@
+[
+  "multi-agent orchestration patterns",
+  "agent observability and tracing",
+  "human-in-the-loop agent design",
+  "agentic system governance and guardrails",
+  "agent memory architectures",
+  "tool use and function calling patterns",
+  "supervisor and critic agent patterns",
+  "agent evaluation and testing strategies",
+  "structured outputs and contract-driven agents",
+  "agentic workflow reliability and error recovery",
+  "LLM routing and model selection in pipelines",
+  "agent state management across long-running tasks",
+  "retrieval-augmented generation in agentic systems",
+  "agent security and prompt injection defense",
+  "cost and latency optimization in agentic pipelines",
+  "emerging agentic frameworks comparison",
+  "real-world agentic system case studies",
+  "agent deployment patterns on cloud infrastructure",
+  "ethical considerations in autonomous agent design",
+  "agentic systems for developer tooling and platforms"
+]

@@ -48,33 +48,15 @@ from crewai_tools import ScrapeWebsiteTool
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
+from config_loader import load_sources
 from contracts.nodes import FetchTaskInput, FetchTaskResult
 from contracts.primitives import ArticleRaw, RetryReasonCode
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Curated source list
-# High-quality RSS feeds focused on AI engineering and agentic systems.
-# Exported so graph/nodes.py can pass them into FetchTaskInput.
-# ---------------------------------------------------------------------------
-DEFAULT_SOURCES = [
-    "https://simonwillison.net/atom/everything/",
-    "https://lilianweng.github.io/index.xml",
-    "https://www.deeplearning.ai/blog/feed/",
-    "https://blog.langchain.dev/rss/",
-    "https://newsletter.theaiedge.io/feed",
-    "https://www.anthropic.com/news/rss.xml",
-    "https://openai.com/blog/rss.xml",
-    "https://huggingface.co/blog/feed.xml",
-    "https://towardsdatascience.com/feed",
-    "https://newsletter.pragmaticengineer.com/feed",
-    "https://www.llamaindex.ai/blog/feed.xml",
-    "https://blog.crewai.com/rss/",
-    "https://huyenchip.com/feed.xml",
-    "https://eugeneyan.com/feed.xml",
-    "https://vickiboykis.com/feed.xml"
-]
+# RSS/Atom source list — loaded from newsfloor/config_data/sources.json.
+# Edit that file to add, remove, or swap feed URLs without changing Python code.
+DEFAULT_SOURCES = load_sources()
 
 
 def run(task_input: FetchTaskInput) -> FetchTaskResult:
