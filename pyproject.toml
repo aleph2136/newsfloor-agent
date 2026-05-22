@@ -68,4 +68,9 @@ ignore_missing_imports = true
 # --- Pytest ---
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths    = ["tests"]
+# Default run covers deterministic tiers (unit, integration, tier3).
+# Run tests/tier4/ explicitly when making material LLM changes — see README.
+testpaths = ["tests/unit", "tests/integration", "tests/tier3"]
+markers = [
+    "tier4: LLM-as-judge tests requiring live AWS Bedrock access (auto-skipped when credentials are absent)",
+]

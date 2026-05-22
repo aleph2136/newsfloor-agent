@@ -114,12 +114,20 @@ agentic_learning/
             └── trend/                # Trend tracking, strength decay, weekly synthesis
 tests/
 ├── conftest.py                       # sys.path setup for all tests
-├── unit/
-│   ├── test_state.py                 # State merging and reducer logic (22 tests)
-│   ├── test_strength.py              # Trend strength calculations (31 tests)
-│   └── test_routing.py              # Supervisor routing decisions (14 tests)
-└── integration/
-    └── test_graph_flow.py            # Full graph topology with mocked nodes (4 tests)
+├── unit/                             # Tier 1 — pure deterministic logic (67 tests)
+│   ├── test_state.py
+│   ├── test_strength.py
+│   └── test_routing.py
+├── integration/                      # Tier 2 — full graph with mocked nodes (4 tests)
+│   └── test_graph_flow.py
+├── tier3/                            # Tier 3 — schema contracts and scoring math (~90 tests)
+│   ├── test_scoring_pipeline.py
+│   └── test_schema_contracts.py
+└── tier4/                            # Tier 4 — LLM-as-judge quality tests
+    ├── conftest.py                   # Judge helper, LLM availability check, shared fixtures
+    ├── test_topic_quality.py
+    ├── test_synthesis_quality.py
+    └── test_scoring_quality.py
 ```
 
 ---
@@ -268,10 +276,10 @@ uv sync
 
 **Run the test suite:**
 ```powershell
-uv run pytest tests/ -q
+uv run pytest -q
 ```
 
-You should see 71 tests pass. The tests don't make any LLM calls or hit AWS — all CrewAI node logic is mocked at the graph boundary.
+You should see 170 tests pass. These cover pure logic and schema contracts only — no LLM calls, no AWS. See the [Testing](#testing) section for when to run the Tier 4 LLM-as-judge tests.
 
 **Verify JSON config files load correctly:**
 ```powershell
@@ -282,42 +290,99 @@ uv run python -c "from newsfloor.config_loader import load_topics, load_sources,
 
 ## Testing
 
-The test suite is organized into four tiers. The first two are implemented and passing.
+The test suite has four tiers. **Tiers 1–3 run on every change. Tier 4 is opt-in — run it when you make material changes to LLM-adjacent code.**
+
+```
+tests/
+├── unit/          Tier 1 — pure functions, no I/O
+├── integration/   Tier 2 — full graph with mocked nodes
+├── tier3/         Tier 3 — scoring math, Pydantic contracts, edge cases
+└── tier4/         Tier 4 — live LLM calls evaluated by a judge model
+```
+
+The default `uv run pytest` command covers Tiers 1–3 (configured via `testpaths` in `pyproject.toml`). Tier 4 requires explicit invocation.
+
+---
 
 ### Tier 1 — Unit Tests (67 tests)
 
-These test deterministic logic with no LLM or AWS involvement:
+Pure deterministic logic. No LLM calls, no AWS, no I/O.
 
-| File | What it tests | Count |
-|------|---------------|-------|
-| `tests/unit/test_state.py` | State merging, `rework_counts` reducer, partial updates | 22 |
-| `tests/unit/test_strength.py` | Trend strength decay, boost, archival thresholds | 31 |
-| `tests/unit/test_routing.py` | Supervisor routing decisions given mocked state | 14 |
+| File | What it covers | Count |
+|------|----------------|-------|
+| `tests/unit/test_state.py` | State merging, `rework_counts` reducer | 22 |
+| `tests/unit/test_strength.py` | Trend strength boost/decay/archive math | 31 |
+| `tests/unit/test_routing.py` | Supervisor routing decisions | 14 |
 
-Run unit tests only:
 ```powershell
 uv run pytest tests/unit/ -q
 ```
 
+**Run on:** every commit.
+
+---
+
 ### Tier 2 — Integration Tests (4 tests)
 
-These build the real compiled graph and run it end-to-end with all node logic mocked. They verify that:
-- The graph topology is correct (no missing edges, no dead ends)
-- Supervisor rework loops route correctly and respect the retry cap
-- Degraded-mode fallbacks work when upstream state is missing
+Builds the compiled LangGraph and runs it end-to-end with all node functions mocked. Verifies the graph topology, supervisor rework loops, and retry cap enforcement.
 
-Run integration tests only:
 ```powershell
 uv run pytest tests/integration/ -q
 ```
 
-### Tier 3 — Schema and Assertion Tests (not yet implemented)
+**Run on:** every commit. Together with Tier 1, this is what `uv run pytest -q` covers.
 
-Planned: validate that LLM outputs conform to their Pydantic contracts, that scoring math produces expected ranges, and that edge-case inputs are handled gracefully.
+---
 
-### Tier 4 — LLM-as-Judge Tests (not yet implemented)
+### Tier 3 — Schema and Assertion Tests (~90 tests)
 
-Planned: run the full pipeline against live LLMs and evaluate output quality using a judge model. Intended to catch prompt regressions that pass structural checks but produce worse output.
+Validates the deterministic scoring math, Pydantic contract enforcement, and JSON parsing/fallback behavior. No LLM calls — all `_score_relevance` invocations are patched out.
+
+| File | What it covers |
+|------|----------------|
+| `tests/tier3/test_scoring_pipeline.py` | `_combine_scores` arithmetic, `_parse_relevance_output` parsing, `_apply_retry_adjustments` threshold logic, `run()` integration |
+| `tests/tier3/test_schema_contracts.py` | Required fields, float bounds (`ge=0.0, le=1.0`), alias handling, default values, count consistency |
+
+Included in the default `uv run pytest` run — no separate invocation needed.
+
+---
+
+### Tier 4 — LLM-as-Judge Tests
+
+Runs the actual CrewAI crews against live Bedrock models and evaluates output quality using Claude Haiku as a judge. These catch **prompt regressions** — changes that pass all structural checks but produce noticeably worse output.
+
+| File | Node tested | What the judge evaluates |
+|------|-------------|--------------------------|
+| `tests/tier4/test_topic_quality.py` | `topic` | Topic from rotation, not recently repeated, focus angle is specific, rationale references context |
+| `tests/tier4/test_synthesis_quality.py` | `synthesis` | HTML structure, topic addressed, technical depth for Sam, no phantom URLs, signals are specific |
+| `tests/tier4/test_scoring_quality.py` | `scoring` | Relevant articles score higher than irrelevant, score gap > 0.3, rationales don't contradict scores |
+
+**Prerequisites:** AWS credentials with Bedrock access enabled for Claude Haiku 4.5. Tests auto-skip (via `pytest.mark.skipif`) when credentials are absent — they will not fail, they simply will not run.
+
+```powershell
+uv run pytest tests/tier4/ -q
+```
+
+Each test file caches its node output at `scope="module"`, so each crew runs once per session regardless of how many assertions check it.
+
+**Run when you change:**
+- Any prompt string in `node_definitions/topic.py`, `synthesis.py`, or `scoring.py`
+- Scoring weights (`RELEVANCE_WEIGHT`, `REPUTATION_WEIGHT`) or the default threshold
+- The Bedrock model ID for any tested node (`BEDROCK_MODEL_HAIKU`, `BEDROCK_MODEL_SONNET`)
+- `config_data/profile.json` — the engineer profile is used directly in synthesis criteria
+- `config_data/topics.json` — the rotation list is checked deterministically by the topic test
+
+**Do not run on every commit.** Each full Tier 4 session makes approximately 15–20 Bedrock inference calls. Run it before merging a branch that touches prompt text, scoring logic, or model configuration.
+
+To iterate on a single node without running all three files:
+```powershell
+uv run pytest tests/tier4/test_synthesis_quality.py -v
+```
+
+To run only the deterministic checks within Tier 4 (no judge calls):
+```powershell
+uv run pytest tests/tier4/ -v -k "not quality"
+```
 
 ---
 

@@ -7,6 +7,7 @@ agentic_learning.egg-info/dependency_links.txt
 agentic_learning.egg-info/requires.txt
 agentic_learning.egg-info/top_level.txt
 newsfloor/__init__.py
+newsfloor/config_loader.py
 newsfloor/handler.py
 newsfloor/contracts/__init__.py
 newsfloor/contracts/nodes.py
