@@ -1,0 +1,71 @@
+[project]
+name = "agentic-learning"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3~=1.42.79",
+    "botocore~=1.42.79",
+    "crewai-tools[beautifulsoup4]==1.14.4",
+    "crewai[bedrock,tools]==1.14.4",
+    "feedparser==6.0.11",
+    "httpx~=0.28.1",
+    "langgraph>=0.2.0,<0.3.0",
+    "pydantic~=2.12.0",
+    "pydantic-settings~=2.10.1",
+    "python-dateutil==2.9.0",
+    "tenacity==8.3.0",
+]
+
+[project.optional-dependencies]
+# Install with: pip install -e ".[dev]"
+dev = [
+    "pytest==8.2.0",
+    "pytest-asyncio==0.23.7",
+    "ruff==0.4.4",
+    "mypy==1.10.0",
+    "boto3-stubs[dynamodb,ses,bedrock-runtime]",
+]
+
+[build-system]
+requires      = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+# ---------------------------------------------------------------------------
+# Package discovery
+# ---------------------------------------------------------------------------
+# This is the section that was missing. Without it setuptools doesn't know
+# that contracts/ and graph/ are importable packages, so `pip install -e .`
+# puts the project root on sys.path but Python still can't find them.
+#
+# find: auto-discovers all packages (directories with __init__.py)
+# where: "." means look in the project root, not a src/ subdirectory
+# ---------------------------------------------------------------------------
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["contracts*", "graph*"]
+ 
+ 
+# --- Ruff ---
+[tool.ruff]
+target-version = "py312"
+line-length    = 100
+ 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+ 
+ 
+# --- Mypy ---
+[tool.mypy]
+python_version         = "3.12"
+strict                 = true
+plugins                = ["pydantic.mypy"]
+ignore_missing_imports = true
+ 
+ 
+# --- Pytest ---
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths    = ["tests"]

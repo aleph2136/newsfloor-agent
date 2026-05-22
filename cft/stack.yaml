@@ -1,0 +1,303 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AI Agent Morning Digest — all infrastructure resources.
+  Creates the Lambda function, EventBridge schedule, DynamoDB tables,
+  SES configuration, and the IAM role the Lambda runs under.
+ 
+# =============================================================================
+# Parameters
+# Passed in at deploy time via the deploy.ps1 script.
+# Nothing here should be hardcoded — change values in deploy.ps1 instead.
+# =============================================================================
+Parameters:
+ 
+  SenderEmail:
+    Type: String
+    Description: >
+      Verified SES email address the digest is sent FROM.
+      Must be verified in SES before first run.
+ 
+  RecipientEmail:
+    Type: String
+    Description: >
+      Email address the digest is sent TO.
+      Must be verified in SES if your account is still in sandbox mode.
+ 
+  ScheduleExpression:
+    Type: String
+    Default: "cron(0 12 * * ? *)"
+    Description: >
+      EventBridge schedule in UTC. Default is 7am Eastern (12:00 UTC).
+      Adjust for your timezone. Uses AWS cron syntax.
+ 
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    Description: Lambda timeout in seconds. 300 (5 min) is the safe starting point.
+ 
+  LambdaMemory:
+    Type: Number
+    Default: 512
+    Description: >
+      Lambda memory in MB. CrewAI agent loops are CPU-bound so more memory
+      also means more vCPU allocation. 512 is a good starting point.
+ 
+  DeploymentBucket:
+    Type: String
+    Description: >
+      S3 bucket name where the deployment zip is uploaded before deploy.
+      Created manually once — see deploy.ps1 for the creation command.
+ 
+  DeploymentZipKey:
+    Type: String
+    Default: "digest-agent/deployment.zip"
+    Description: S3 key for the deployment zip file.
+ 
+  Environment:
+    Type: String
+    Default: "prod"
+    AllowedValues: ["prod", "dev"]
+    Description: Used to namespace resource names so dev and prod can coexist.
+ 
+ 
+# =============================================================================
+# Resources
+# =============================================================================
+Resources:
+ 
+  # ---------------------------------------------------------------------------
+  # DynamoDB Tables
+  # ---------------------------------------------------------------------------
+ 
+  RunRecordsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "digest-run-records-${Environment}"
+      BillingMode: PAY_PER_REQUEST       # on-demand — no capacity to manage
+      TableClass: STANDARD_INFREQUENT_ACCESS  # cheaper for infrequently read data
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false  # not worth the cost for expendable run data
+      AttributeDefinitions:
+        - AttributeName: run_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: run_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl              # DynamoDB auto-deletes records after 30 days
+        Enabled: true                   # TTL value written by the Trend node at run time
+      Tags:
+        - Key: Project
+          Value: digest-agent
+ 
+  WeeklySynthesisTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "digest-weekly-synthesis-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS
+      AttributeDefinitions:
+        - AttributeName: week_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: week_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl              # 90-day TTL written by Trend node
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: digest-agent
+ 
+  TrendsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "digest-trends-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD               # queried on every run — standard is faster
+      AttributeDefinitions:
+        - AttributeName: trend_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: trend_id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: digest-agent
+ 
+  SourcesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "digest-sources-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD               # read on every run for reputation map
+      AttributeDefinitions:
+        - AttributeName: domain
+          AttributeType: S
+      KeySchema:
+        - AttributeName: domain
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: digest-agent
+ 
+ 
+  # ---------------------------------------------------------------------------
+  # IAM Role
+  # Least-privilege: only the specific actions this Lambda actually needs.
+  # ---------------------------------------------------------------------------
+ 
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "digest-agent-lambda-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Basic Lambda execution — allows CloudWatch Logs writes only
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DigestAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+ 
+              # DynamoDB — all four tables, only the operations we actually use
+              - Sid: DynamoDBAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt RunRecordsTable.Arn
+                  - !GetAtt WeeklySynthesisTable.Arn
+                  - !GetAtt TrendsTable.Arn
+                  - !GetAtt SourcesTable.Arn
+ 
+              # SES — send email only, scoped to the sender address
+              - Sid: SESSendEmail
+                Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SenderEmail
+ 
+              # Bedrock — invoke the two models we use
+              # Using inference profile ARNs for Claude 4 models
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  # Haiku 4.5
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  # Sonnet 4.6 — uses inference profile in us-east-1
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
+                  # Cross-region inference profile wildcard (required for Claude 4 in some regions)
+                  - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+ 
+ 
+  # ---------------------------------------------------------------------------
+  # Lambda Function
+  # ---------------------------------------------------------------------------
+ 
+  DigestAgentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "digest-agent-${Environment}"
+      Description: "AI Agent Morning Digest — hub-and-spoke CrewAI pipeline"
+      Runtime: python3.12
+      Handler: handler.lambda_handler      # handler.py, lambda_handler function
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemory
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DeploymentZipKey
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          # DynamoDB table names — match what CFT creates above
+          DYNAMODB_RUNS_TABLE: !Ref RunRecordsTable
+          DYNAMODB_WEEKLY_TABLE: !Ref WeeklySynthesisTable
+          DYNAMODB_TRENDS_TABLE: !Ref TrendsTable
+          DYNAMODB_SOURCES_TABLE: !Ref SourcesTable
+          # SES
+          SES_SENDER_EMAIL: !Ref SenderEmail
+          SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+          # Bedrock model IDs
+          BEDROCK_MODEL_HAIKU: "bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
+          BEDROCK_MODEL_SONNET: "bedrock/anthropic.claude-sonnet-4-6"
+          # AWS region passed explicitly so boto3 clients don't need to discover it
+          AWS_REGION_NAME: !Ref AWS::Region
+      Tags:
+        Project: digest-agent
+ 
+ 
+  # ---------------------------------------------------------------------------
+  # EventBridge Scheduled Rule
+  # ---------------------------------------------------------------------------
+ 
+  DigestScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "digest-agent-daily-${Environment}"
+      Description: "Triggers the digest agent Lambda every morning"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: DigestAgentTarget
+          Arn: !GetAtt DigestAgentFunction.Arn
+ 
+  # Permission for EventBridge to invoke the Lambda
+  DigestSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DigestAgentFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DigestScheduleRule.Arn
+ 
+ 
+# =============================================================================
+# Outputs
+# Values printed after deploy — useful for debugging and future stack references
+# =============================================================================
+Outputs:
+ 
+  LambdaFunctionName:
+    Description: "Lambda function name"
+    Value: !Ref DigestAgentFunction
+ 
+  LambdaFunctionArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt DigestAgentFunction.Arn
+ 
+  RunRecordsTableName:
+    Description: "DynamoDB run records table name"
+    Value: !Ref RunRecordsTable
+ 
+  TrendsTableName:
+    Description: "DynamoDB trends table name"
+    Value: !Ref TrendsTable
+ 
+  SourcesTableName:
+    Description: "DynamoDB sources table name"
+    Value: !Ref SourcesTable
+ 
+  LambdaRoleArn:
+    Description: "IAM role ARN — useful for verifying permissions"
+    Value: !GetAtt LambdaExecutionRole.Arn

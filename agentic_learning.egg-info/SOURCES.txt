@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+agentic_learning.egg-info/PKG-INFO
+agentic_learning.egg-info/SOURCES.txt
+agentic_learning.egg-info/dependency_links.txt
+agentic_learning.egg-info/requires.txt
+agentic_learning.egg-info/top_level.txt
