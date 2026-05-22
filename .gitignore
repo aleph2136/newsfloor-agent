@@ -17,3 +17,5 @@ package/
 .venv/
 venv/
 env/
+
+.claude

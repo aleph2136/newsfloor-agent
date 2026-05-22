@@ -278,6 +278,18 @@ Return a JSON object with exactly these fields:
 
     crew.kickoff()
 
+    if not evaluate_task.output or not evaluate_task.output.raw:
+        logger.warning({
+            "node":    "output_supervisor",
+            "warning": "Evaluator crew produced no output — defaulting to PROCEED",
+        })
+        return SupervisorDecision(
+            supervisor   = NodeName.OUTPUT_SUPERVISOR,
+            route        = SupervisorRoute.PROCEED,
+            rework_count = rework_count,
+            rationale    = "Evaluator produced no output — proceeding by default.",
+        )
+
     return _parse_llm_decision(
         raw_output   = evaluate_task.output.raw,
         rework_count = rework_count,

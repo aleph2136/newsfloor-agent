@@ -214,9 +214,16 @@ Return a JSON object with exactly these fields:
         verbose = False,
     )
  
-    result = crew.kickoff()
- 
-    # CrewAI populates output_pydantic on the last task
+    crew.kickoff()
+
+    # Guard against CrewAI deserialization failure — output_pydantic is None
+    # if the LLM returned malformed JSON or the crew failed internally.
+    if not refine_task.output or not refine_task.output.pydantic:
+        raw = refine_task.output.raw if refine_task.output else "None"
+        raise RuntimeError(
+            f"Topic crew failed to produce a valid TopicTaskResult. Raw output: {raw!r}"
+        )
+
     task_result: TopicTaskResult = refine_task.output.pydantic
  
     logger.info({

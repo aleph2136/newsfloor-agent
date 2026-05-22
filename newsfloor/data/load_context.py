@@ -108,9 +108,9 @@ def run() -> OrchestratorContext:
     recent_weekly_signals = []
     for week in weekly_records:
         recent_weekly_signals.extend(week.recurring_signals)
-        recent_weekly_signals.extend(week.emerging_signals)
+        recent_weekly_signals.extend(week.emerging_concepts)
 
-    logger.info("load_context: context assumbled successfully")
+    logger.info("load_context: context assembled successfully")
 
     return OrchestratorContext(
         active_trends           = active_trends,

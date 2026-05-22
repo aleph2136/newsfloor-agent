@@ -32,15 +32,18 @@ Parameters:
  
   LambdaTimeout:
     Type: Number
-    Default: 300
-    Description: Lambda timeout in seconds. 300 (5 min) is the safe starting point.
- 
+    Default: 900
+    Description: >
+      Lambda timeout in seconds. 900 (15 min) accommodates multi-agent LLM
+      execution across topic, fetch, scoring, synthesis, and both supervisors.
+
   LambdaMemory:
     Type: Number
-    Default: 512
+    Default: 1024
     Description: >
       Lambda memory in MB. CrewAI agent loops are CPU-bound so more memory
-      also means more vCPU allocation. 512 is a good starting point.
+      also means more vCPU allocation. 1024 provides headroom for concurrent
+      agent execution without OOM on typical digest runs.
  
   DeploymentBucket:
     Type: String
@@ -194,20 +197,24 @@ Resources:
                   StringEquals:
                     ses:FromAddress: !Ref SenderEmail
  
-              # Bedrock — invoke the two models we use
-              # Using inference profile ARNs for Claude 4 models
+              # Bedrock — all four models used in the pipeline
               - Sid: BedrockInvoke
                 Effect: Allow
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  # Haiku 4.5
+                  # Haiku 4.5 (topic, fetch, scoring, signal extraction)
                   - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
-                  # Sonnet 4.6 — uses inference profile in us-east-1
+                  # Sonnet 4.6 — synthesis writer (uses cross-region inference profile)
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
-                  # Cross-region inference profile wildcard (required for Claude 4 in some regions)
                   - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+                  # Amazon Nova Pro — input supervisor
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0"
+                  # Meta Llama 3.3 70B — output supervisor
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/meta.llama3-3-70b-instruct-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama3-3-70b-instruct-v1:0"
  
  
   # ---------------------------------------------------------------------------
@@ -220,7 +227,7 @@ Resources:
       FunctionName: !Sub "digest-agent-${Environment}"
       Description: "AI Agent Morning Digest — hub-and-spoke CrewAI pipeline"
       Runtime: python3.12
-      Handler: handler.lambda_handler      # handler.py, lambda_handler function
+      Handler: newsfloor.handler.lambda_handler  # newsfloor/handler.py, lambda_handler function
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemory
@@ -238,9 +245,12 @@ Resources:
           # SES
           SES_SENDER_EMAIL: !Ref SenderEmail
           SES_RECIPIENT_EMAIL: !Ref RecipientEmail
-          # Bedrock model IDs
+          # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_HAIKU: "bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_SONNET: "bedrock/anthropic.claude-sonnet-4-6"
+          # Supervisor models — intentionally different providers to avoid monoculture
+          BEDROCK_MODEL_INPUT_SUPERVISOR: "bedrock/us.amazon.nova-pro-v1:0"
+          BEDROCK_MODEL_OUTPUT_SUPERVISOR: "bedrock/us.meta.llama3-3-70b-instruct-v1:0"
           # AWS region passed explicitly so boto3 clients don't need to discover it
           AWS_REGION_NAME: !Ref AWS::Region
       Tags:

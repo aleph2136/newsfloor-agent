@@ -33,23 +33,14 @@ The flow is linear with two rework loops:
 
 from __future__ import annotations
 import logging
-from datetime import datetime
 
-from crewai import state
-
-from contracts.primitives import NodeName, RunStatus, SupervisorRoute
+from contracts.primitives import NodeName, RunStatus, SupervisorDecision, SupervisorRoute
 from contracts.nodes import (
     TopicTaskInput,
-    TopicTaskResult,
-    FetchTaskResult,
-    ScoringTaskResult,
-    SynthesisTaskResult,
-    DeliveryTaskResult,
-    TrendTaskResult,
     InputSupervisorInput,
     OutputSupervisorInput,
 )
-from .state import DigestGraphState
+from state import DigestGraphState
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -303,12 +294,30 @@ def output_supervisor(state: DigestGraphState) -> dict:
         "rework_count": rework_count,
     })
  
+    topic_result = state.get("topic_result")
+    context      = state.get("context")
+
+    if not topic_result or not context:
+        logger.warning({
+            "node":    "output_supervisor",
+            "run_id":  state["run_id"],
+            "message": "Missing topic_result or context — forcing proceed in degraded mode",
+        })
+        return {
+            "output_supervisor_decision": SupervisorDecision(
+                supervisor   = NodeName.OUTPUT_SUPERVISOR,
+                route        = SupervisorRoute.PROCEED,
+                rework_count = rework_count,
+                rationale    = "Missing upstream state — forced proceed in degraded mode",
+            )
+        }
+
     supervisor_input = OutputSupervisorInput(
         run_id           = state["run_id"],
         synthesis_result = state["synthesis_result"],
-        topic            = state["topic_result"].topic,
-        focus_angle      = state["topic_result"].focus_angle,
-        engineer_profile = state["context"].engineer_profile,
+        topic            = topic_result.topic,
+        focus_angle      = topic_result.focus_angle,
+        engineer_profile = context.engineer_profile,
         rework_count     = rework_count,
     )
  
@@ -346,8 +355,8 @@ def delivery_node(state: DigestGraphState) -> dict:
     )
  
     result = delivery_run(task_input)
- 
-    return {"delivery_result": None}
+
+    return {"delivery_result": result}
 
 # ---------------------------------------------------------------------------
 # trend_node

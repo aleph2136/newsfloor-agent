@@ -300,10 +300,18 @@ Return a JSON object with exactly these fields:
     crew.kickoff()
 
     # -------------------------------------------------------------------------
-    # Parse results
+    # Parse results — guard against partial crew failure
     # -------------------------------------------------------------------------
-    digest_html    = write_task.output.raw.strip()
-    signals_output = _parse_signals_output(extract_task.output.raw)
+    if not write_task.output or not write_task.output.raw:
+        raise RuntimeError("Synthesis crew write task produced no output.")
+
+    digest_html = write_task.output.raw.strip()
+
+    if not extract_task.output or not extract_task.output.raw:
+        logger.warning({"node": "synthesis", "warning": "Signal extractor produced no output — using empty signals"})
+        signals_output = {"new_signals": [], "trend_confirmations": [], "digest_summary": ""}
+    else:
+        signals_output = _parse_signals_output(extract_task.output.raw)
 
     logger.info({
         "node":               "synthesis",

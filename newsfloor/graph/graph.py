@@ -33,8 +33,8 @@ from __future__ import annotations
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph import StateGraph, START, END
 from contracts.primitives import NodeName
-from .state import DigestGraphState
-from .nodes import (
+from state import DigestGraphState
+from nodes import (
     load_context,
     topic_node,
     fetch_node,

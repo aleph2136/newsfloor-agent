@@ -3,8 +3,16 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from graph import build_graph
-from contracts.primitives import NodeName, SupervisorRoute, RetryReasonCode, RunStatus
+from contracts.primitives import (
+    NodeName,
+    RetryInstruction,
+    RetryReasonCode,
+    RunStatus,
+    SupervisorDecision,
+    SupervisorRoute,
+)
 from contracts.nodes import (
+    EngineerProfile,
     OrchestratorContext,
     TopicTaskResult,
     FetchTaskResult,
@@ -13,21 +21,29 @@ from contracts.nodes import (
     DeliveryTaskResult,
     TrendTaskResult,
 )
-from contracts.primitives import SupervisorDecision, RetryInstruction
 
 @pytest.fixture
 def compiled_graph():
     return build_graph()
 
 @pytest.fixture
-def mock_context():
+def mock_engineer_profile():
+    return EngineerProfile(
+        name="Sam",
+        focus_areas=["platform engineering", "AI agents", "AWS"],
+        background_summary="Senior engineer moving into AI architecture.",
+        experience_level="senior engineer",
+    )
+
+@pytest.fixture
+def mock_context(mock_engineer_profile):
     context = MagicMock(spec=OrchestratorContext)
     context.recent_topics = []
     context.active_trends = []
     context.recent_weekly_signals = []
     context.source_reputation_map = {}
     context.recent_run_signals = []
-    context.engineer_profile = MagicMock()
+    context.engineer_profile = mock_engineer_profile
     return context
 
 @pytest.fixture
@@ -212,7 +228,7 @@ def test_graph_input_rework_loop_limit(
         rationale="Topic and articles are weak. Try another selection.",
         retry_instruction=RetryInstruction(
             target_node=NodeName.TOPIC,
-            reason_code=RetryReasonCode.WEAK_TOPIC_SELECTION,
+            reason_code=RetryReasonCode.LOW_CONFIDENCE,
             parameter_adjustment={"previous_topic": "multi-agent orchestration patterns"}
         )
     )
@@ -259,4 +275,197 @@ def test_graph_input_rework_loop_limit(
     
     # Rework counts should be accumulated in the state
     assert final_state["rework_counts"][NodeName.INPUT_SUPERVISOR.value] == 2
+    assert final_state["run_status"] == RunStatus.COMPLETED
+
+
+@patch("data.load_context.run")
+@patch("node_definitions.topic.run")
+@patch("node_definitions.fetch.run")
+@patch("node_definitions.scoring.run")
+@patch("node_definitions.input_supervisor.run")
+@patch("node_definitions.synthesis.run")
+@patch("node_definitions.output_supervisor.run")
+@patch("node_definitions.delivery.run")
+@patch("node_definitions.trend.run")
+def test_graph_output_rework_loop_limit(
+    mock_trend,
+    mock_delivery,
+    mock_output_sup,
+    mock_synthesis,
+    mock_input_sup,
+    mock_scoring,
+    mock_fetch,
+    mock_topic,
+    mock_load_context,
+    compiled_graph,
+    mock_context,
+    mock_topic_result,
+    mock_fetch_result,
+    mock_scoring_result,
+    mock_synthesis_result,
+    mock_trend_result,
+):
+    """
+    Test that the graph handles REWORK from the output supervisor.
+    After 2 reworks, route_output_supervisor forces proceed to delivery
+    rather than looping forever.
+
+    Expected execution order:
+      Pass 1: load_context → topic → fetch → scoring → input_supervisor (PROCEED)
+               → synthesis → output_supervisor (REWORK, count=1)
+      Pass 2: → synthesis → output_supervisor (REWORK, count=2)
+      Pass 3: route_output_supervisor sees count >= 2 → forced to delivery → trend
+    """
+    mock_load_context.return_value = mock_context
+    mock_topic.return_value = mock_topic_result
+    mock_fetch.return_value = mock_fetch_result
+    mock_scoring.return_value = mock_scoring_result
+
+    mock_input_sup.return_value = SupervisorDecision(
+        supervisor=NodeName.INPUT_SUPERVISOR,
+        route=SupervisorRoute.PROCEED,
+        rework_count=0,
+        rationale="Input is fine.",
+    )
+
+    mock_synthesis.return_value = mock_synthesis_result
+
+    # Output supervisor ALWAYS returns REWORK
+    mock_output_sup.return_value = SupervisorDecision(
+        supervisor=NodeName.OUTPUT_SUPERVISOR,
+        route=SupervisorRoute.REWORK,
+        rework_count=0,
+        rationale="Digest needs improvement.",
+    )
+
+    mock_delivery.return_value = MagicMock()
+    mock_trend.return_value = mock_trend_result
+
+    initial_state = {"run_id": "output-rework-run", "rework_counts": {}}
+    final_state = compiled_graph.invoke(initial_state)
+
+    # Input stage runs once
+    mock_load_context.assert_called_once()
+    mock_topic.assert_called_once()
+    mock_fetch.assert_called_once()
+    mock_scoring.assert_called_once()
+    mock_input_sup.assert_called_once()
+
+    # Synthesis and output_supervisor each run twice before forced proceed
+    assert mock_synthesis.call_count == 2
+    assert mock_output_sup.call_count == 2
+
+    # Delivery and trend run once after the forced proceed
+    mock_delivery.assert_called_once()
+    mock_trend.assert_called_once()
+
+    assert final_state["rework_counts"][NodeName.OUTPUT_SUPERVISOR.value] == 2
+    assert final_state["run_status"] == RunStatus.COMPLETED
+
+
+@patch("data.load_context.run")
+@patch("node_definitions.topic.run")
+@patch("node_definitions.fetch.run")
+@patch("node_definitions.scoring.run")
+@patch("node_definitions.input_supervisor.run")
+@patch("node_definitions.synthesis.run")
+@patch("node_definitions.output_supervisor.run")
+@patch("node_definitions.delivery.run")
+@patch("node_definitions.trend.run")
+def test_graph_both_supervisors_rework_once(
+    mock_trend,
+    mock_delivery,
+    mock_output_sup,
+    mock_synthesis,
+    mock_input_sup,
+    mock_scoring,
+    mock_fetch,
+    mock_topic,
+    mock_load_context,
+    compiled_graph,
+    mock_context,
+    mock_topic_result,
+    mock_fetch_result,
+    mock_scoring_result,
+    mock_synthesis_result,
+    mock_trend_result,
+):
+    """
+    Test that rework counts for each supervisor accumulate independently
+    when each supervisor reworks exactly once before proceeding.
+
+    Expected execution order:
+      Pass 1: load_context → topic → fetch → scoring → input_supervisor (REWORK, count=1)
+      Pass 2: → topic → fetch → scoring → input_supervisor (PROCEED)
+               → synthesis → output_supervisor (REWORK, count=1)
+      Pass 3: → synthesis → output_supervisor (PROCEED)
+               → delivery → trend
+
+    Final rework_counts: {input_supervisor: 1, output_supervisor: 1}
+    """
+    mock_load_context.return_value = mock_context
+    mock_topic.return_value = mock_topic_result
+    mock_fetch.return_value = mock_fetch_result
+    mock_scoring.return_value = mock_scoring_result
+
+    mock_input_sup.side_effect = [
+        SupervisorDecision(
+            supervisor=NodeName.INPUT_SUPERVISOR,
+            route=SupervisorRoute.REWORK,
+            rework_count=0,
+            rationale="Weak articles — try another topic.",
+            retry_instruction=RetryInstruction(
+                target_node=NodeName.TOPIC,
+                reason_code=RetryReasonCode.LOW_CONFIDENCE,
+                parameter_adjustment={"previous_topic": "multi-agent orchestration patterns"},
+            ),
+        ),
+        SupervisorDecision(
+            supervisor=NodeName.INPUT_SUPERVISOR,
+            route=SupervisorRoute.PROCEED,
+            rework_count=0,
+            rationale="Input is now acceptable.",
+        ),
+    ]
+
+    mock_synthesis.return_value = mock_synthesis_result
+
+    mock_output_sup.side_effect = [
+        SupervisorDecision(
+            supervisor=NodeName.OUTPUT_SUPERVISOR,
+            route=SupervisorRoute.REWORK,
+            rework_count=0,
+            rationale="Digest needs more depth.",
+        ),
+        SupervisorDecision(
+            supervisor=NodeName.OUTPUT_SUPERVISOR,
+            route=SupervisorRoute.PROCEED,
+            rework_count=0,
+            rationale="Digest is now acceptable.",
+        ),
+    ]
+
+    mock_delivery.return_value = MagicMock()
+    mock_trend.return_value = mock_trend_result
+
+    initial_state = {"run_id": "both-rework-run", "rework_counts": {}}
+    final_state = compiled_graph.invoke(initial_state)
+
+    # Input stage loops once: each node called twice
+    assert mock_topic.call_count == 2
+    assert mock_fetch.call_count == 2
+    assert mock_scoring.call_count == 2
+    assert mock_input_sup.call_count == 2
+
+    # Output stage loops once: each node called twice
+    assert mock_synthesis.call_count == 2
+    assert mock_output_sup.call_count == 2
+
+    # Terminal nodes run exactly once
+    mock_delivery.assert_called_once()
+    mock_trend.assert_called_once()
+
+    # Verify both supervisors accumulated their rework counts independently
+    assert final_state["rework_counts"][NodeName.INPUT_SUPERVISOR.value] == 1
+    assert final_state["rework_counts"][NodeName.OUTPUT_SUPERVISOR.value] == 1
     assert final_state["run_status"] == RunStatus.COMPLETED
