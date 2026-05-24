@@ -52,17 +52,13 @@ Parameters:
       also means more vCPU allocation. 1024 provides headroom for concurrent
       agent execution without OOM on typical digest runs.
  
-  DeploymentBucket:
+  ImageUri:
     Type: String
     Description: >
-      S3 bucket name where the deployment zip is uploaded before deploy.
-      Created manually once — see deploy.ps1 for the creation command.
- 
-  DeploymentZipKey:
-    Type: String
-    Default: "digest-agent/deployment.zip"
-    Description: S3 key for the deployment zip file.
- 
+      ECR image URI for the Lambda container, e.g.
+      123456789012.dkr.ecr.us-east-1.amazonaws.com/digest-agent-prod:latest.
+      Built and pushed by deploy.ps1 before each CloudFormation deploy.
+
   Environment:
     Type: String
     Default: "prod"
@@ -222,14 +218,12 @@ Resources:
     Properties:
       FunctionName: !Sub "digest-agent-${Environment}"
       Description: "AI Agent Morning Digest — hub-and-spoke CrewAI pipeline"
-      Runtime: python3.12
-      Handler: newsfloor.handler.lambda_handler  # newsfloor/handler.py, lambda_handler function
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemory
-      Code:
-        S3Bucket: !Ref DeploymentBucket
-        S3Key: !Ref DeploymentZipKey
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
