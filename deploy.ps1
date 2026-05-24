@@ -211,12 +211,12 @@ aws cloudformation deploy `
     --region $AWS_REGION `
     --capabilities CAPABILITY_NAMED_IAM `
     --parameter-overrides `
-        SmtpSenderEmail=$SENDER_EMAIL `
-        SmtpRecipientEmail=$RECIPIENT_EMAIL `
-        SmtpPassword=$SMTP_PASSWORD `
-        ScheduleExpression=$SCHEDULE `
-        DeploymentBucket=$DEPLOYMENT_BUCKET `
-        Environment=$ENVIRONMENT `
+        "SmtpSenderEmail=$SENDER_EMAIL" `
+        "SmtpRecipientEmail=$RECIPIENT_EMAIL" `
+        "SmtpPassword=$SMTP_PASSWORD" `
+        "ScheduleExpression=$SCHEDULE" `
+        "DeploymentBucket=$DEPLOYMENT_BUCKET" `
+        "Environment=$ENVIRONMENT" `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -ne 0) {
