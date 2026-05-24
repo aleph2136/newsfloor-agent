@@ -8,7 +8,7 @@
 # First-time setup:
 #   1. Set the required environment variables listed in the CONFIG section below
 #   2. Run: .\deploy.ps1 -FirstRun
-#      This creates the S3 bucket and verifies your SES email addresses.
+#      This creates the S3 bucket and deploys the stack.
 #
 # Subsequent deploys (code changes only):
 #   .\deploy.ps1
@@ -18,7 +18,7 @@
 # =============================================================================
 
 param(
-    [switch]$FirstRun,   # creates S3 bucket + verifies SES on first deploy
+    [switch]$FirstRun,   # creates S3 bucket on first deploy
     [switch]$InfraOnly   # skips packaging, just updates the CFT
 )
 
@@ -28,8 +28,10 @@ param(
 # Required:
 #   $env:NEWSFLOOR_DEPLOYMENT_BUCKET   globally-unique S3 bucket name
 #                                      e.g. "newsroom-agent-deploy-123456789012"
-#   $env:NEWSFLOOR_SENDER_EMAIL        SES-verified sender address
-#   $env:NEWSFLOOR_RECIPIENT_EMAIL     digest recipient address
+#   $env:NEWSFLOOR_SENDER_EMAIL        Gmail address used to send the digest
+#   $env:NEWSFLOOR_RECIPIENT_EMAIL     address the digest is delivered to
+#   $env:NEWSFLOOR_SMTP_PASSWORD       Gmail App Password (not your account password)
+#                                      Generate at: https://myaccount.google.com/apppasswords
 #
 # Optional (defaults shown):
 #   $env:NEWSFLOOR_AWS_REGION          default: "us-east-1"
@@ -44,6 +46,7 @@ $AWS_REGION        = if ($env:NEWSFLOOR_AWS_REGION)        { $env:NEWSFLOOR_AWS_
 $DEPLOYMENT_BUCKET = $env:NEWSFLOOR_DEPLOYMENT_BUCKET
 $SENDER_EMAIL      = $env:NEWSFLOOR_SENDER_EMAIL
 $RECIPIENT_EMAIL   = $env:NEWSFLOOR_RECIPIENT_EMAIL
+$SMTP_PASSWORD     = $env:NEWSFLOOR_SMTP_PASSWORD
 $SCHEDULE          = if ($env:NEWSFLOOR_SCHEDULE)          { $env:NEWSFLOOR_SCHEDULE }          else { "cron(0 12 * * ? *)" }
 
 # Validate required variables
@@ -51,6 +54,7 @@ $missing = @()
 if (-not $DEPLOYMENT_BUCKET) { $missing += "NEWSFLOOR_DEPLOYMENT_BUCKET" }
 if (-not $SENDER_EMAIL)      { $missing += "NEWSFLOOR_SENDER_EMAIL" }
 if (-not $RECIPIENT_EMAIL)   { $missing += "NEWSFLOOR_RECIPIENT_EMAIL" }
+if (-not $SMTP_PASSWORD)     { $missing += "NEWSFLOOR_SMTP_PASSWORD" }
 
 if ($missing.Count -gt 0) {
     Write-Host ""
@@ -61,6 +65,10 @@ if ($missing.Count -gt 0) {
     Write-Host '  $env:NEWSFLOOR_DEPLOYMENT_BUCKET = "newsroom-agent-deploy-123456789012"' -ForegroundColor Yellow
     Write-Host '  $env:NEWSFLOOR_SENDER_EMAIL      = "you@gmail.com"' -ForegroundColor Yellow
     Write-Host '  $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@gmail.com"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_SMTP_PASSWORD     = "xxxx xxxx xxxx xxxx"' -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "SMTP_PASSWORD must be a Gmail App Password, not your regular account password." -ForegroundColor Yellow
+    Write-Host "Generate one at: https://myaccount.google.com/apppasswords" -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }
@@ -77,7 +85,7 @@ Write-Host ""
 
 
 # -----------------------------------------------------------------------------
-# STEP 1 — First-run setup (bucket + SES verification)
+# STEP 1 — First-run setup (S3 bucket creation)
 # -----------------------------------------------------------------------------
 if ($FirstRun) {
     Write-Host "[1/5] Creating S3 deployment bucket..." -ForegroundColor Yellow
@@ -101,22 +109,6 @@ if ($FirstRun) {
             "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
 
     Write-Host "    Bucket created." -ForegroundColor Green
-
-    Write-Host "[1/5] Requesting SES email verification..." -ForegroundColor Yellow
-    aws ses verify-email-identity --email-address $SENDER_EMAIL --region $AWS_REGION
-    aws ses verify-email-identity --email-address $RECIPIENT_EMAIL --region $AWS_REGION
-
-    Write-Host ""
-    Write-Host "    IMPORTANT: Check both inboxes and click the verification links" -ForegroundColor Magenta
-    Write-Host "    before running your first deploy. SES will reject sends from" -ForegroundColor Magenta
-    Write-Host "    unverified addresses." -ForegroundColor Magenta
-    Write-Host ""
-
-    $confirm = Read-Host "Have you verified both email addresses? (yes/no)"
-    if ($confirm -ne "yes") {
-        Write-Host "Exiting. Re-run without -FirstRun once emails are verified." -ForegroundColor Red
-        exit 1
-    }
 }
 
 
@@ -146,13 +138,14 @@ if (-not $InfraOnly) {
     }
 
     # Install Linux-compatible wheels into ./package
-    # --python-platform manylinux_2_17_x86_64: Lambda runtime (equivalent to manylinux2014)
+    # --python-platform manylinux_2_28_x86_64: Lambda Python 3.12 runs on Amazon Linux 2023
+    #   which requires glibc >= 2.28. manylinux_2_17 (AL2) is too old for recent packages.
     # --python-version 3.12: match Lambda runtime version
     # Cross-compilation is safe here — uv resolves the correct platform wheels on Windows
     uv pip install `
         --requirements $TEMP_REQS `
         --target $PACKAGE_DIR `
-        --python-platform manylinux_2_17_x86_64 `
+        --python-platform manylinux_2_28_x86_64 `
         --python-version 3.12 `
         --quiet
 
@@ -218,8 +211,9 @@ aws cloudformation deploy `
     --region $AWS_REGION `
     --capabilities CAPABILITY_NAMED_IAM `
     --parameter-overrides `
-        SenderEmail=$SENDER_EMAIL `
-        RecipientEmail=$RECIPIENT_EMAIL `
+        SmtpSenderEmail=$SENDER_EMAIL `
+        SmtpRecipientEmail=$RECIPIENT_EMAIL `
+        SmtpPassword=$SMTP_PASSWORD `
         ScheduleExpression=$SCHEDULE `
         DeploymentBucket=$DEPLOYMENT_BUCKET `
         Environment=$ENVIRONMENT `

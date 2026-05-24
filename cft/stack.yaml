@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   AI Agent Morning Digest — all infrastructure resources.
   Creates the Lambda function, EventBridge schedule, DynamoDB tables,
-  SES configuration, and the IAM role the Lambda runs under.
+  and the IAM role the Lambda runs under. Email is sent via Gmail SMTP.
  
 # =============================================================================
 # Parameters
@@ -10,18 +10,25 @@ Description: >
 # Nothing here should be hardcoded — change values in deploy.ps1 instead.
 # =============================================================================
 Parameters:
- 
-  SenderEmail:
+
+  SmtpSenderEmail:
     Type: String
     Description: >
-      Verified SES email address the digest is sent FROM.
-      Must be verified in SES before first run.
- 
-  RecipientEmail:
+      Gmail address the digest is sent FROM.
+      Must match the account that owns the App Password below.
+
+  SmtpRecipientEmail:
     Type: String
     Description: >
-      Email address the digest is sent TO.
-      Must be verified in SES if your account is still in sandbox mode.
+      Email address the digest is delivered TO.
+
+  SmtpPassword:
+    Type: String
+    NoEcho: true
+    Description: >
+      Gmail App Password for the sender account.
+      Generate at https://myaccount.google.com/apppasswords.
+      NoEcho prevents it from appearing in CloudFormation console output.
  
   ScheduleExpression:
     Type: String
@@ -186,17 +193,6 @@ Resources:
                   - !GetAtt TrendsTable.Arn
                   - !GetAtt SourcesTable.Arn
  
-              # SES — send email only, scoped to the sender address
-              - Sid: SESSendEmail
-                Effect: Allow
-                Action:
-                  - ses:SendEmail
-                  - ses:SendRawEmail
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    ses:FromAddress: !Ref SenderEmail
- 
               # Bedrock — all four models used in the pipeline
               - Sid: BedrockInvoke
                 Effect: Allow
@@ -242,9 +238,10 @@ Resources:
           DYNAMODB_WEEKLY_TABLE: !Ref WeeklySynthesisTable
           DYNAMODB_TRENDS_TABLE: !Ref TrendsTable
           DYNAMODB_SOURCES_TABLE: !Ref SourcesTable
-          # SES
-          SES_SENDER_EMAIL: !Ref SenderEmail
-          SES_RECIPIENT_EMAIL: !Ref RecipientEmail
+          # Gmail SMTP
+          SMTP_SENDER_EMAIL: !Ref SmtpSenderEmail
+          SMTP_RECIPIENT_EMAIL: !Ref SmtpRecipientEmail
+          SMTP_PASSWORD: !Ref SmtpPassword
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_HAIKU: "bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_SONNET: "bedrock/anthropic.claude-sonnet-4-6"
