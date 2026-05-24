@@ -1,0 +1,9 @@
+.venv/
+package/
+tests/
+*.zip
+*.pyc
+__pycache__/
+.git/
+.env
+uv.lock
