@@ -5,10 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.12",
     "boto3~=1.42.79",
     "botocore~=1.42.79",
-    "crewai-tools[beautifulsoup4]==1.14.4",
-    "crewai[bedrock,tools]==1.14.4",
+    "crewai[bedrock]==1.14.4",
     "feedparser==6.0.11",
     "httpx~=0.28.1",
     "langgraph>=0.2.0,<0.3.0",

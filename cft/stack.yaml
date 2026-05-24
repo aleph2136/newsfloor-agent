@@ -241,7 +241,7 @@ Resources:
           # Gmail SMTP
           SMTP_SENDER_EMAIL: !Ref SmtpSenderEmail
           SMTP_RECIPIENT_EMAIL: !Ref SmtpRecipientEmail
-          SMTP_PASSWORD: !Ref SmtpPassword
+          SMTP_APP_TOKEN: !Ref SmtpPassword
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_HAIKU: "bedrock/anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_SONNET: "bedrock/anthropic.claude-sonnet-4-6"
@@ -251,7 +251,8 @@ Resources:
           # AWS region passed explicitly so boto3 clients don't need to discover it
           AWS_REGION_NAME: !Ref AWS::Region
       Tags:
-        Project: digest-agent
+        - Key: Project
+          Value: digest-agent
  
  
   # ---------------------------------------------------------------------------

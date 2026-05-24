@@ -157,6 +157,33 @@ if (-not $InfraOnly) {
 
     Remove-Item -Force $TEMP_REQS
 
+    # ---------------------------------------------------------------------------
+    # Strip packages that crewai pulls in transitively but that this project
+    # never uses at runtime.
+    #
+    # onnxruntime — required by chromadb (crewai's vector store) for its default
+    #   ONNX embedding function. This project uses DynamoDB for memory and Bedrock
+    #   for inference; chromadb's embedding path is never invoked. onnxruntime is
+    #   confirmed unused: tests pass with it absent (verified via uv pip uninstall).
+    #
+    # chromadb — crewai's memory backend. This project implements its own memory
+    #   in DynamoDB; crewai memory features are never enabled or called.
+    # ---------------------------------------------------------------------------
+    Write-Host "    Stripping unused heavy packages..." -ForegroundColor DarkGray
+    $stripPackages = @("onnxruntime", "onnxruntime_tools", "chromadb")
+    foreach ($pkg in $stripPackages) {
+        $pkgPath = Join-Path $PACKAGE_DIR $pkg
+        if (Test-Path $pkgPath) {
+            Remove-Item -Recurse -Force $pkgPath
+            Write-Host "      removed: $pkg" -ForegroundColor DarkGray
+        }
+    }
+
+    $unzippedMB = [math]::Round(
+        (Get-ChildItem -Path $PACKAGE_DIR -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1
+    )
+    Write-Host "    Unzipped size after stripping: $unzippedMB MB (limit: 250 MB)" -ForegroundColor DarkGray
+
     # Copy application source into the package directory
     # newsfloor/ — main package (handler, graph, node_definitions, data, contracts)
     Copy-Item -Recurse (Join-Path $PROJECT_ROOT "newsfloor") (Join-Path $PACKAGE_DIR "newsfloor")

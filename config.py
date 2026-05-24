@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     smtp_sender_email:    str = Field(default="you@gmail.com")
     smtp_recipient_email: str = Field(default="you@gmail.com")
-    smtp_password:        str = Field(default="")
+    smtp_app_token:       str = Field(default="")
  
     # -------------------------------------------------------------------------
     # Bedrock model config

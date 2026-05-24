@@ -140,7 +140,7 @@ class TestRunHappyPath:
         mock_smtp_class.return_value.__exit__  = MagicMock(return_value=False)
 
         with patch("node_definitions.delivery.settings") as mock_settings:
-            mock_settings.smtp_password = "app-password-123"
+            mock_settings.smtp_app_token = "app-password-123"
             run(_task_input(sender_email="sender@gmail.com"))
 
         mock_server.login.assert_called_once_with("sender@gmail.com", "app-password-123")

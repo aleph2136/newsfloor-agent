@@ -42,9 +42,10 @@ from urllib.parse import urlparse
 
 import feedparser
 import httpx
+from bs4 import BeautifulSoup
 from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
-from crewai_tools import ScrapeWebsiteTool
+from crewai.tools import BaseTool
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
@@ -53,6 +54,31 @@ from contracts.nodes import FetchTaskInput, FetchTaskResult
 from contracts.primitives import ArticleRaw, RetryReasonCode
 
 logger = logging.getLogger(__name__)
+
+
+class ScrapeWebsiteTool(BaseTool):
+    name: str = "Scrape Website"
+    description: str = (
+        "Fetches the text content of a web page. "
+        "Input: the full URL of the page to scrape."
+    )
+
+    def _run(self, website_url: str) -> str:
+        try:
+            response = httpx.get(
+                website_url,
+                timeout=15.0,
+                follow_redirects=True,
+                headers={"User-Agent": "NewsFloorBot/1.0 (RSS reader for AI engineering news)"},
+            )
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            return soup.get_text(separator="\n", strip=True)[:3000]
+        except Exception as exc:
+            return f"Failed to scrape {website_url}: {exc}"
+
 
 # RSS/Atom source list — loaded from newsfloor/config_data/sources.json.
 # Edit that file to add, remove, or swap feed URLs without changing Python code.

@@ -122,7 +122,7 @@ def _send_email(task_input: DeliveryTaskInput) -> str:
     msg.attach(MIMEText(task_input.digest_html, "html", "utf-8"))
 
     with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
-        server.login(task_input.sender_email, settings.smtp_password)
+        server.login(task_input.sender_email, settings.smtp_app_token)
         server.sendmail(
             task_input.sender_email,
             task_input.recipient_email,

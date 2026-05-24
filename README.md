@@ -199,7 +199,7 @@ AWS_REGION=us-east-1
 # Gmail SMTP — generate an App Password at https://myaccount.google.com/apppasswords
 SMTP_SENDER_EMAIL=you@gmail.com
 SMTP_RECIPIENT_EMAIL=you@gmail.com
-SMTP_PASSWORD=your-app-password-here
+SMTP_APP_TOKEN=your-app-password-here
 
 # DynamoDB tables (must match stack.yaml)
 DYNAMODB_RUNS_TABLE=digest-run-records-prod
