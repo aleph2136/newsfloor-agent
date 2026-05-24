@@ -228,13 +228,13 @@ For **production**, set `SMTP_SENDER_EMAIL`, `SMTP_RECIPIENT_EMAIL`, and `SMTP_P
 
 ### 3. Deployment Settings (environment variables for `deploy.ps1`)
 
-Set these before running the deployment script. They control where the code is uploaded and what email addresses to use.
+Set these before running the deployment script. They control what email addresses to use and optional stack naming. The ECR repository is created automatically — no bucket name needed.
 
 ```powershell
 # Required
-$env:NEWSFLOOR_DEPLOYMENT_BUCKET = "newsroom-agent-deploy-123456789012"  # globally unique S3 bucket name
 $env:NEWSFLOOR_SENDER_EMAIL      = "digest@yourdomain.com"
 $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@yourdomain.com"
+$env:NEWSFLOOR_SMTP_PASSWORD     = "xxxx xxxx xxxx xxxx"   # Gmail App Password
 
 # Optional (these are the defaults)
 $env:NEWSFLOOR_AWS_REGION        = "us-east-1"
@@ -254,11 +254,12 @@ Before deploying or running locally, you need:
    ```powershell
    pip install uv
    ```
-3. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, IAM, S3, and CloudFormation resources
+3. **Docker Desktop** — used to build the Lambda container image
+4. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, IAM, ECR, and CloudFormation resources
    ```powershell
    aws configure
    ```
-4. **Bedrock model access** — in the AWS console, navigate to Bedrock > Model access and enable:
+5. **Bedrock model access** — in the AWS console, navigate to Bedrock > Model access and enable:
    - Anthropic Claude Haiku 4.5
    - Anthropic Claude Sonnet 4.6
    - Amazon Nova Pro
@@ -392,9 +393,8 @@ uv run pytest tests/tier4/ -v -k "not quality"
 
 ### First-Time Setup
 
-**Step 1 — Set your deployment environment variables:**
+**Step 1 — Ensure Docker Desktop is running**, then set your deployment environment variables:
 ```powershell
-$env:NEWSFLOOR_DEPLOYMENT_BUCKET = "your-unique-bucket-name-here"
 $env:NEWSFLOOR_SENDER_EMAIL      = "you@gmail.com"
 $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@gmail.com"
 $env:NEWSFLOOR_SMTP_PASSWORD     = "your-app-password-here"
@@ -408,21 +408,21 @@ $env:NEWSFLOOR_SMTP_PASSWORD     = "your-app-password-here"
 ```
 
 This will:
-1. Create the S3 deployment bucket
-2. Build the deployment package (pip-compatible Linux wheels via `uv`)
-3. Upload the package to S3
+1. Create the ECR repository (`digest-agent-prod`) to store the container image
+2. Build the container image using the `Dockerfile` at the project root
+3. Push the image to ECR
 4. Deploy the CloudFormation stack (Lambda, DynamoDB tables, EventBridge schedule, IAM role)
 
 ---
 
 ### Subsequent Deploys
 
-After code or config changes:
+After code or config changes (rebuilds and pushes the image, then updates the stack):
 ```powershell
 .\deploy.ps1
 ```
 
-To update infrastructure only (no repackage):
+To update infrastructure only (no image rebuild or push):
 ```powershell
 .\deploy.ps1 -InfraOnly
 ```
@@ -446,11 +446,12 @@ aws logs tail /aws/lambda/digest-agent-prod --follow --region us-east-1
 
 ## AWS Infrastructure
 
-All infrastructure is defined in `cft/stack.yaml` and managed by CloudFormation. No resources need to be created manually after the first-run S3 bucket.
+All infrastructure is defined in `cft/stack.yaml` and managed by CloudFormation. The only resource created outside CloudFormation is the ECR repository, which `deploy.ps1 -FirstRun` creates via the AWS CLI before the first stack deploy.
 
 | Resource | Purpose |
 |----------|---------|
-| **Lambda function** | Runs the pipeline; 15-minute timeout, 1024 MB memory |
+| **ECR repository** | Stores the Lambda container image (`digest-agent-prod`) — created by `-FirstRun` |
+| **Lambda function** | Runs the pipeline as a container image; 15-minute timeout, 1024 MB memory |
 | **EventBridge rule** | Triggers Lambda on schedule (7am Eastern by default) |
 | **digest-run-records** | One record per daily run; 30-day TTL |
 | **digest-weekly-synthesis** | Weekly distilled signals; 90-day TTL |
@@ -498,7 +499,7 @@ Trend strength bands: `emerging` (0.1–0.39) → `growing` (0.4–0.64) → `st
 ## Troubleshooting
 
 **"Missing required environment variables" error on deploy:**
-Set `NEWSFLOOR_DEPLOYMENT_BUCKET`, `NEWSFLOOR_SENDER_EMAIL`, and `NEWSFLOOR_RECIPIENT_EMAIL` before running `deploy.ps1`.
+Set `NEWSFLOOR_SENDER_EMAIL`, `NEWSFLOOR_RECIPIENT_EMAIL`, and `NEWSFLOOR_SMTP_PASSWORD` before running `deploy.ps1`.
 
 **Lambda times out:**
 The function has a 15-minute timeout. If it's consistently running close to the limit, check CloudWatch logs for which node is slow. The synthesis and supervisor nodes are the most LLM-intensive. You can also reduce `FETCH_MAX_ARTICLES` (default: 10) to process fewer articles per run.
