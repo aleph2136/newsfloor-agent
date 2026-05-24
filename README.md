@@ -17,7 +17,7 @@ Every morning, the pipeline wakes up and runs ten steps:
 5. **Reviews the quality** of what it found — if the results aren't good enough, it loops back and tries again (up to twice)
 6. **Writes the digest** — a focused HTML email that summarizes the best articles and highlights what's meaningful about them
 7. **Reviews the digest** — if the writing doesn't meet its own standard, it rewrites (up to twice)
-8. **Sends the email** via AWS SES
+8. **Sends the email** via Gmail SMTP
 9. **Updates its memory** — trend strength scores, source reputation, and a weekly synthesis for long-term context
 
 The whole thing runs in under 15 minutes on a cold Lambda start. You can also trigger it manually with a single CLI command.
@@ -110,7 +110,7 @@ agentic_learning/
             ├── input_supervisor.py   # Pre-synthesis quality gate
             ├── synthesis.py          # Three-agent digest writing crew
             ├── output_supervisor.py  # Pre-delivery quality gate
-            ├── delivery.py           # SES email send
+            ├── delivery.py           # Gmail SMTP email send
             └── trend/                # Trend tracking, strength decay, weekly synthesis
 tests/
 ├── conftest.py                       # sys.path setup for all tests
@@ -196,9 +196,10 @@ For **local development**, create a `.env` file in the project root:
 # AWS
 AWS_REGION=us-east-1
 
-# Email
-SES_SENDER_EMAIL=you@yourdomain.com
-SES_RECIPIENT_EMAIL=you@yourdomain.com
+# Gmail SMTP — generate an App Password at https://myaccount.google.com/apppasswords
+SMTP_SENDER_EMAIL=you@gmail.com
+SMTP_RECIPIENT_EMAIL=you@gmail.com
+SMTP_PASSWORD=your-app-password-here
 
 # DynamoDB tables (must match stack.yaml)
 DYNAMODB_RUNS_TABLE=digest-run-records-prod
@@ -221,7 +222,7 @@ TREND_BOOST_RATE=0.25
 MAX_RETRIES_PER_NODE=2
 ```
 
-For **production**, the CloudFormation stack injects SES addresses as Lambda environment variables. All other values use their defaults unless you override them via the Lambda console or stack parameters.
+For **production**, set `SMTP_SENDER_EMAIL`, `SMTP_RECIPIENT_EMAIL`, and `SMTP_PASSWORD` as Lambda environment variables. All other values use their defaults unless you override them via the Lambda console or stack parameters.
 
 ---
 
@@ -253,7 +254,7 @@ Before deploying or running locally, you need:
    ```powershell
    pip install uv
    ```
-3. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, SES, IAM, S3, and CloudFormation resources
+3. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, IAM, S3, and CloudFormation resources
    ```powershell
    aws configure
    ```
@@ -279,7 +280,7 @@ uv sync
 uv run pytest -q
 ```
 
-You should see 170 tests pass. These cover pure logic and schema contracts only — no LLM calls, no AWS. See the [Testing](#testing) section for when to run the Tier 4 LLM-as-judge tests.
+You should see ~188 tests pass. These cover pure logic and schema contracts only — no LLM calls, no AWS. See the [Testing](#testing) section for when to run the Tier 4 LLM-as-judge tests.
 
 **Verify JSON config files load correctly:**
 ```powershell
@@ -304,7 +305,7 @@ The default `uv run pytest` command covers Tiers 1–3 (configured via `testpath
 
 ---
 
-### Tier 1 — Unit Tests (67 tests)
+### Tier 1 — Unit Tests (85 tests)
 
 Pure deterministic logic. No LLM calls, no AWS, no I/O.
 
@@ -313,6 +314,7 @@ Pure deterministic logic. No LLM calls, no AWS, no I/O.
 | `tests/unit/test_state.py` | State merging, `rework_counts` reducer | 22 |
 | `tests/unit/test_strength.py` | Trend strength boost/decay/archive math | 31 |
 | `tests/unit/test_routing.py` | Supervisor routing decisions | 14 |
+| `tests/unit/test_delivery.py` | Subject extraction, HTML-to-text, SMTP send/failure | 18 |
 
 ```powershell
 uv run pytest tests/unit/ -q
@@ -393,9 +395,12 @@ uv run pytest tests/tier4/ -v -k "not quality"
 **Step 1 — Set your deployment environment variables:**
 ```powershell
 $env:NEWSFLOOR_DEPLOYMENT_BUCKET = "your-unique-bucket-name-here"
-$env:NEWSFLOOR_SENDER_EMAIL      = "digest@yourdomain.com"
-$env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@yourdomain.com"
+$env:NEWSFLOOR_SENDER_EMAIL      = "you@gmail.com"
+$env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@gmail.com"
+$env:NEWSFLOOR_SMTP_PASSWORD     = "your-app-password-here"
 ```
+
+> **Gmail App Password:** Email is sent via Gmail SMTP using an App Password — not your regular Google account password. Generate one at [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords). 2-Step Verification must be enabled on your Google account first.
 
 **Step 2 — Run the first-deploy script:**
 ```powershell
@@ -404,13 +409,9 @@ $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@yourdomain.com"
 
 This will:
 1. Create the S3 deployment bucket
-2. Send SES verification emails to both addresses
-3. Pause and ask you to confirm you've clicked both verification links
-4. Build the deployment package (pip-compatible Linux wheels via `uv`)
-5. Upload the package to S3
-6. Deploy the CloudFormation stack (Lambda, DynamoDB tables, EventBridge schedule, IAM role)
-
-> **SES sandbox note:** New AWS accounts are in SES sandbox mode, which means you can only send to verified addresses. The first-run script verifies both the sender and recipient. If you want to send to unverified recipients, you'll need to request SES production access from the AWS console.
+2. Build the deployment package (pip-compatible Linux wheels via `uv`)
+3. Upload the package to S3
+4. Deploy the CloudFormation stack (Lambda, DynamoDB tables, EventBridge schedule, IAM role)
 
 ---
 
@@ -455,7 +456,7 @@ All infrastructure is defined in `cft/stack.yaml` and managed by CloudFormation.
 | **digest-weekly-synthesis** | Weekly distilled signals; 90-day TTL |
 | **digest-trends** | Active trend records with strength scores |
 | **digest-sources** | Domain-level reputation scores |
-| **IAM role** | Least-privilege: only the specific DynamoDB, SES, and Bedrock actions actually used |
+| **IAM role** | Least-privilege: only the specific DynamoDB and Bedrock actions actually used |
 
 The DynamoDB tables use on-demand billing — you pay per read/write, not per hour. At one run per day, the cost is negligible.
 
@@ -504,8 +505,9 @@ The function has a 15-minute timeout. If it's consistently running close to the 
 
 **No email received:**
 1. Check CloudWatch logs for the Lambda run: `aws logs tail /aws/lambda/digest-agent-prod --follow`
-2. Verify both email addresses are confirmed in SES: AWS console → SES → Verified identities
-3. If your account is in SES sandbox, only verified addresses can receive mail
+2. Verify `SMTP_PASSWORD` is set correctly — it must be a Gmail App Password, not your regular account password
+3. Confirm 2-Step Verification is enabled on the sender Google account (required for App Passwords)
+4. Check that the App Password was generated for "Mail" access, not a different Google service
 
 **LLM errors in logs:**
 Bedrock model access must be enabled per-region before first use. Go to AWS console → Bedrock → Model access and enable all four models used by the pipeline.

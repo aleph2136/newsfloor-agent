@@ -1,15 +1,21 @@
 """
 nodes/delivery.py
 
-Sends the digest email via AWS SES.
+Sends the digest email via Google SMTP (Gmail).
 
 No crew, no LLM — this node is pure I/O. The digest has already been
 written and approved by the output supervisor. This node's only job is
 to get it into the recipient's inbox reliably.
 
+Authentication
+──────────────
+Gmail requires an App Password, not your regular account password.
+Generate one at: https://myaccount.google.com/apppasswords
+Set SMTP_PASSWORD in your .env file or Lambda environment variables.
+
 Retry strategy
 ──────────────
-SES send failures are almost always transient — throttling, brief
+SMTP send failures are almost always transient — throttling, brief
 service interruptions, network timeouts. Tenacity handles retries
 at the function level with exponential backoff. LangGraph does not
 retry this node — by the time we're here the digest is approved and
@@ -23,19 +29,15 @@ Three attempts with backoff:
 After three failures the error is logged and a DeliveryTaskResult
 with sent=False is returned. The graph continues to the trend node
 regardless — state should always be written even if delivery failed.
-
-SES sandbox note
-────────────────
-If your AWS account SES is still in sandbox mode both sender and
-recipient must be verified identities. The deploy script handles
-verification — check both inboxes before first run.
 """
 
 from __future__ import annotations
 import logging
+import smtplib
+import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-import boto3
-from botocore.exceptions import ClientError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -48,10 +50,13 @@ from contracts.nodes import DeliveryTaskInput, DeliveryTaskResult
 
 logger = logging.getLogger(__name__)
 
+_SMTP_HOST = "smtp.gmail.com"
+_SMTP_PORT = 465
+
 
 def run(task_input: DeliveryTaskInput) -> DeliveryTaskResult:
     """
-    Sends the digest email via SES and returns a DeliveryTaskResult.
+    Sends the digest email via Gmail SMTP and returns a DeliveryTaskResult.
     Never raises — returns sent=False with error details on failure.
     """
     logger.info({
@@ -90,48 +95,41 @@ def run(task_input: DeliveryTaskInput) -> DeliveryTaskResult:
 
 
 # ---------------------------------------------------------------------------
-# SES send — retried by tenacity, not by LangGraph
+# SMTP send — retried by tenacity, not by LangGraph
 # ---------------------------------------------------------------------------
 
 @retry(
-    retry     = retry_if_exception_type(ClientError),
+    retry     = retry_if_exception_type(smtplib.SMTPException),
     stop      = stop_after_attempt(3),
     wait      = wait_exponential(multiplier=1, min=2, max=8),
     reraise   = True,
 )
 def _send_email(task_input: DeliveryTaskInput) -> str:
     """
-    Sends the email via SES. Returns the SES message ID on success.
-    Retried up to 3 times on ClientError with exponential backoff.
+    Sends the email via Gmail SMTP SSL. Returns a generated message ID.
+    Retried up to 3 times on SMTPException with exponential backoff.
     reraise=True means the final failure propagates to run() where
     it is caught and returned as a DeliveryTaskResult with sent=False.
     """
-    client = boto3.client("ses", region_name=settings.aws_region)
-
     subject = _extract_subject(task_input.digest_html, task_input.topic)
 
-    response = client.send_email(
-        Source      = task_input.sender_email,
-        Destination = {"ToAddresses": [task_input.recipient_email]},
-        Message     = {
-            "Subject": {
-                "Data":    subject,
-                "Charset": "UTF-8",
-            },
-            "Body": {
-                "Html": {
-                    "Data":    task_input.digest_html,
-                    "Charset": "UTF-8",
-                },
-                "Text": {
-                    "Data":    _html_to_text(task_input.digest_html),
-                    "Charset": "UTF-8",
-                },
-            },
-        },
-    )
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = task_input.sender_email
+    msg["To"]      = task_input.recipient_email
 
-    return response["MessageId"]
+    msg.attach(MIMEText(_html_to_text(task_input.digest_html), "plain", "utf-8"))
+    msg.attach(MIMEText(task_input.digest_html, "html", "utf-8"))
+
+    with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
+        server.login(task_input.sender_email, settings.smtp_password)
+        server.sendmail(
+            task_input.sender_email,
+            task_input.recipient_email,
+            msg.as_string(),
+        )
+
+    return str(uuid.uuid4())
 
 
 # ---------------------------------------------------------------------------

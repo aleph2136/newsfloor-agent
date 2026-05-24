@@ -38,11 +38,13 @@ class Settings(BaseSettings):
     dynamodb_sources_table: str = Field(default="digest-sources")
  
     # -------------------------------------------------------------------------
-    # SES email config
-    # Both addresses must be verified in SES before the Delivery node will work.
+    # Gmail SMTP config
+    # Use a Gmail App Password — generate one at:
+    # https://myaccount.google.com/apppasswords
     # -------------------------------------------------------------------------
-    ses_sender_email:    str = Field(default="digest@yourdomain.com")
-    ses_recipient_email: str = Field(default="you@yourdomain.com")
+    smtp_sender_email:    str = Field(default="you@gmail.com")
+    smtp_recipient_email: str = Field(default="you@gmail.com")
+    smtp_password:        str = Field(default="")
  
     # -------------------------------------------------------------------------
     # Bedrock model config

@@ -27,7 +27,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "boto3-stubs", extra = ["bedrock-runtime", "dynamodb", "ses"] },
+    { name = "boto3-stubs", extra = ["bedrock-runtime", "dynamodb"] },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -37,7 +37,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = "~=1.42.79" },
-    { name = "boto3-stubs", extras = ["dynamodb", "ses", "bedrock-runtime"], marker = "extra == 'dev'" },
+    { name = "boto3-stubs", extras = ["dynamodb", "bedrock-runtime"], marker = "extra == 'dev'" },
     { name = "botocore", specifier = "~=1.42.79" },
     { name = "crewai", extras = ["bedrock", "tools"], specifier = "==1.14.4" },
     { name = "crewai-tools", extras = ["beautifulsoup4"], specifier = "==1.14.4" },
@@ -353,9 +353,6 @@ bedrock-runtime = [
 ]
 dynamodb = [
     { name = "mypy-boto3-dynamodb" },
-]
-ses = [
-    { name = "mypy-boto3-ses" },
 ]
 
 [[package]]
@@ -1896,15 +1893,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/38/41/2823aad9f3abab6104cd8aaafebabfba19927227fbc277e2289c3b915c1d/mypy_boto3_dynamodb-1.43.0.tar.gz", hash = "sha256:f0cea38e058f1d07361ecb55d8f40665d824b42cf4864724c7fccc8bf3946fcd", size = 48755, upload-time = "2026-04-29T22:59:59.119Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/be/e2/1f63f04600fc21cb848c10ce16490252e27d812bfd5a716659283049d3a3/mypy_boto3_dynamodb-1.43.0-py3-none-any.whl", hash = "sha256:60b64d15e86d406a980d96f734d8c7fb1704668d0234dc8dabd2532c902a3ba6", size = 58873, upload-time = "2026-04-29T22:59:56.823Z" },
-]
-
-[[package]]
-name = "mypy-boto3-ses"
-version = "1.43.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7c/23/b139e107c39a505d6150707b33c06708c9dfe8fd9f5e8e9ea08cdc705f3c/mypy_boto3_ses-1.43.0.tar.gz", hash = "sha256:24ef4c9ba75326e1676f2473b9268fa53da5bc335a494325b295a0787f9bb793", size = 31133, upload-time = "2026-04-29T23:06:00.456Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/ea/de8628a7797bc1099513a1ccc95204c1c70948cc00cf169dc97b0ea03ab3/mypy_boto3_ses-1.43.0-py3-none-any.whl", hash = "sha256:f24478534a9d7ba573801dc06c9724e4228e1b465083dff542bccc912a37f364", size = 39388, upload-time = "2026-04-29T23:05:57.702Z" },
 ]
 
 [[package]]

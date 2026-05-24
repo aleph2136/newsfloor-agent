@@ -1,36 +1,3 @@
-"""
-graph/nodes.py
- 
-Node function stubs for the digest pipeline graph.
- 
-Each function here is one node in the LangGraph graph. They all share the
-same signature:
- 
-    def node_name(state: DigestGraphState) -> dict
- 
-The return dict is a partial state update — only include keys you changed.
-LangGraph merges this into the full state using the reducers defined in
-graph/state.py.
- 
-Implementation status
-─────────────────────
-These are stubs. Each node has the correct signature, reads the right
-fields from state, and returns the right shape. The actual CrewAI crew
-calls that do the real work are marked with # TODO — those are built
-in the nodes/ package in the next phase.
- 
-Reading guide
-─────────────
-The flow is linear with two rework loops:
- 
-    load_context
-        → topic → fetch → scoring
-        → input_supervisor  (rework → topic, proceed → synthesis)
-        → synthesis
-        → output_supervisor (rework → synthesis, proceed → delivery)
-        → delivery → trend → END
-"""
-
 from __future__ import annotations
 import logging
 
@@ -334,24 +301,24 @@ def output_supervisor(state: DigestGraphState) -> dict:
 
 # ---------------------------------------------------------------------------
 # delivery_node
-# Sends the digest via SES. Retried by tenacity, not by LangGraph.
+# Sends the digest via Gmail SMTP. Retried by tenacity, not by LangGraph.
 # ---------------------------------------------------------------------------
- 
+
 def delivery_node(state: DigestGraphState) -> dict:
     logger.info({"node": "delivery", "run_id": state["run_id"]})
- 
+
     synthesis_result = state["synthesis_result"]
     topic_result     = state["topic_result"]
- 
+
     from node_definitions.delivery import run as delivery_run
     from contracts.nodes import DeliveryTaskInput
- 
+
     task_input = DeliveryTaskInput(
         run_id          = state["run_id"],
         digest_html     = synthesis_result.digest_html,
         topic           = topic_result.topic,
-        recipient_email = settings.ses_recipient_email,
-        sender_email    = settings.ses_sender_email,
+        recipient_email = settings.smtp_recipient_email,
+        sender_email    = settings.smtp_sender_email,
     )
  
     result = delivery_run(task_input)
