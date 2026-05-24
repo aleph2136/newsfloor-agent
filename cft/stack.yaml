@@ -244,6 +244,9 @@ Resources:
           BEDROCK_MODEL_OUTPUT_SUPERVISOR: "bedrock/us.meta.llama3-3-70b-instruct-v1:0"
           # AWS region passed explicitly so boto3 clients don't need to discover it
           AWS_REGION_NAME: !Ref AWS::Region
+          # Lambda's filesystem is read-only except /tmp. Setting HOME=/tmp redirects
+          # home-directory cache/config writes from crewai, litellm, and other libraries.
+          HOME: /tmp
       Tags:
         - Key: Project
           Value: digest-agent

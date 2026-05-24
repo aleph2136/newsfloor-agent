@@ -105,10 +105,10 @@ if ($FirstRun) {
     aws ecr create-repository `
         --repository-name $ECR_REPO_NAME `
         --region $AWS_REGION `
-        --image-scanning-configuration scanOnPush=true | Out-Null
+        --image-scanning-configuration scanOnPush=true
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "    ECR repository may already exist — continuing." -ForegroundColor Yellow
+        Write-Host "    ECR repository may already exist. Continuing." -ForegroundColor Yellow
     } else {
         Write-Host "    ECR repository created." -ForegroundColor Green
     }
@@ -126,7 +126,7 @@ if (-not $InfraOnly) {
     # Generate requirements.txt from pyproject.toml.
     # The Dockerfile COPYs this and installs via pip inside the container.
     # --no-hashes: pip-compatible format  --no-dev: exclude test/lint tools
-    uv export --no-hashes --no-dev --output-file $REQS_PATH
+    uv export --no-hashes --no-dev --no-emit-project --output-file $REQS_PATH
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "uv export failed. Is uv installed? Run: pip install uv" -ForegroundColor Red
@@ -145,8 +145,12 @@ if (-not $InfraOnly) {
 
     # Build the image for Linux/amd64 — Lambda runs on x86_64 Amazon Linux 2023.
     # --platform ensures correct binary wheels even when building on ARM or Windows/WSL.
+    # --provenance=false prevents BuildKit from wrapping the image in an OCI manifest list
+    # (which happens by default in recent Docker Desktop). Lambda only accepts single-platform
+    # image manifests and rejects manifest lists with a 400 "media type not supported" error.
     docker build `
         --platform linux/amd64 `
+        --provenance=false `
         -t $IMAGE_URI `
         $PROJECT_ROOT
 

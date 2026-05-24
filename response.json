@@ -1,0 +1,1 @@
+{"statusCode": 500, "body": "{\"run_id\": \"2026-05-24\", \"status\": \"error\", \"error\": \"[Errno 30] Read-only file system: '/home/sbx_user1051'\"}"}
