@@ -85,8 +85,14 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Could not resolve AWS account ID. Are your AWS credentials configured?" -ForegroundColor Red
     exit 1
 }
+# Use the git short SHA as the image tag so each push has a unique URI.
+# CloudFormation only updates the Lambda function when ImageUri changes — using
+# "latest" every time means CFT sees no change and skips the function update.
+$IMAGE_TAG = (git rev-parse --short HEAD 2>$null)
+if (-not $IMAGE_TAG) { $IMAGE_TAG = (Get-Date -Format 'yyyyMMddHHmmss') }
+
 $ECR_URI   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
-$IMAGE_URI = "${ECR_URI}:latest"
+$IMAGE_URI = "${ECR_URI}:${IMAGE_TAG}"
 
 Write-Host ""
 Write-Host "=== Digest Agent Deploy ===" -ForegroundColor Cyan

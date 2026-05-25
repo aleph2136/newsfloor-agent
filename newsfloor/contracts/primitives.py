@@ -46,6 +46,7 @@ class RetryReasonCode(str, Enum):
     BELOW_SCORE_THRESHOLD  = "below_score_threshold"
     TREND_WRITE_FAILURE    = "trend_write_failure"
     DIGEST_INSUFFICIENT    = "digest_insufficient"
+    WEAK_TOPIC_SELECTION   = "weak_topic_selection"
 
 class TrendStrength(str, Enum):
     """
