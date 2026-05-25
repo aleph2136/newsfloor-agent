@@ -220,7 +220,8 @@ def synthesis_node(state: DigestGraphState) -> dict:
  
     from node_definitions.synthesis import run as synthesis_run
     from contracts.nodes import SynthesisTaskInput
- 
+    from config_loader import load_profile
+
     task_input = SynthesisTaskInput(
         run_id             = state["run_id"],
         topic              = topic_result.topic,
@@ -228,7 +229,7 @@ def synthesis_node(state: DigestGraphState) -> dict:
         passed_articles    = scoring_result.passed_articles,
         active_trends      = context.active_trends if context else [],
         recent_run_signals = context.recent_run_signals if context else [],
-        engineer_profile   = context.engineer_profile if context else None,
+        engineer_profile   = context.engineer_profile if context else load_profile(),
         retry_instruction  = retry,
     )
  
