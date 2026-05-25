@@ -89,7 +89,7 @@ $ECR_URI = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
 
 if ($InfraOnly) {
     # Reuse the image already deployed — don't generate a new tag that doesn't exist in ECR.
-    $IMAGE_URI = (aws lambda get-function-configuration `
+    $IMAGE_URI = (aws lambda get-function `
         --function-name "digest-agent-$ENVIRONMENT" `
         --region $AWS_REGION `
         --query "Code.ImageUri" `
