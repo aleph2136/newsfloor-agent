@@ -205,10 +205,10 @@ Resources:
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
                   - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
                   # Amazon Nova Pro — input supervisor
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0"
                   # Meta Llama 3.3 70B — output supervisor
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/meta.llama3-3-70b-instruct-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/meta.llama3-3-70b-instruct-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama3-3-70b-instruct-v1:0"
  
  
