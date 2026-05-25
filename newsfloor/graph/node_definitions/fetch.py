@@ -50,6 +50,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
 from config_loader import load_sources
+from node_definitions.crew_utils import kickoff_crew
 from contracts.nodes import FetchTaskInput, FetchTaskResult
 from contracts.primitives import ArticleRaw, RetryReasonCode
 
@@ -306,7 +307,7 @@ Use these article IDs:
     )
 
     try:
-        crew.kickoff()
+        kickoff_crew(crew, "fetch", task_input.run_id, [settings.bedrock_model_haiku])
         raw_output = enrich_task.output.raw
 
         import json

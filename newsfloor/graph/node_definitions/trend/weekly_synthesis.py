@@ -21,6 +21,7 @@ from crewai.llm import LLM
 
 from contracts.state import WeeklySynthesis, current_week_id, ttl_days
 from data.db import DynamoDBService
+from node_definitions.crew_utils import kickoff_crew
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ Return only the narrative — no headings, no bullet points.
     crew = Crew(agents=[analyst], tasks=[task], process=Process.sequential, verbose=False)
 
     try:
-        crew.kickoff()
+        kickoff_crew(crew, "trend.weekly_synthesis", None, [llm.model])
         return task.output.raw.strip()
     except Exception as e:
         logger.warning({"function": "_generate_narrative", "error": str(e)})

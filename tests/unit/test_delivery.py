@@ -143,7 +143,7 @@ class TestRunHappyPath:
             mock_settings.smtp_app_token = "app-password-123"
             run(_task_input(sender_email="sender@gmail.com"))
 
-        mock_server.login.assert_called_once_with("sender@gmail.com", "app-password-123")
+        mock_smtp_class.return_value.login.assert_called_once_with("sender@gmail.com", "app-password-123")
 
     @patch("node_definitions.delivery.smtplib.SMTP_SSL")
     def test_sendmail_called_with_correct_addresses(self, mock_smtp_class):
@@ -153,7 +153,7 @@ class TestRunHappyPath:
 
         run(_task_input(sender_email="from@gmail.com", recipient_email="to@example.com"))
 
-        call_args = mock_server.sendmail.call_args
+        call_args = mock_smtp_class.return_value.sendmail.call_args
         assert call_args[0][0] == "from@gmail.com"
         assert call_args[0][1] == "to@example.com"
 

@@ -43,6 +43,7 @@ from contracts.nodes import (
     TopicTaskResult,
 )
 from contracts.primitives import RetryReasonCode
+from node_definitions.crew_utils import kickoff_crew
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,7 @@ Return a JSON object with exactly these fields:
         verbose = False,
     )
  
-    crew.kickoff()
+    kickoff_crew(crew, "topic", task_input.run_id, [settings.bedrock_model_haiku])
 
     # Guard against CrewAI deserialization failure — output_pydantic is None
     # if the LLM returned malformed JSON or the crew failed internally.

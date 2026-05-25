@@ -56,6 +56,7 @@ from crewai.llm import LLM
 from config import settings
 from contracts.nodes import ScoringTaskInput, ScoringTaskResult
 from contracts.primitives import ArticleRaw, ArticleScored, RetryReasonCode
+from node_definitions.crew_utils import kickoff_crew
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +189,7 @@ Return a JSON array where each item has exactly these fields:
     )
 
     try:
-        crew.kickoff()
+        kickoff_crew(crew, "scoring", task_input.run_id, [settings.bedrock_model_haiku])
         return _parse_relevance_output(relevance_task.output.raw)
     except Exception as e:
         logger.warning({"node": "scoring", "warning": f"Relevance scoring failed: {e}"})

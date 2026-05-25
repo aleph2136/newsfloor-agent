@@ -25,6 +25,7 @@ from crewai.llm import LLM
 
 from contracts.primitives import TrendStrength
 from contracts.state import TrendRecord, current_week_id
+from node_definitions.crew_utils import kickoff_crew
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ Return a JSON array — one object per cluster:
     crew = Crew(agents=[analyst], tasks=[task], process=Process.sequential, verbose=False)
 
     try:
-        crew.kickoff()
+        kickoff_crew(crew, "trend.cluster_signals", None, [llm.model])
         result = _parse_json_list(task.output.raw)
         if result:
             return result
@@ -210,7 +211,7 @@ Return a JSON array:
     crew = Crew(agents=[classifier], tasks=[task], process=Process.sequential, verbose=False)
 
     try:
-        crew.kickoff()
+        kickoff_crew(crew, "trend.classify_new_trends", run_id, [llm.model])
         items = _parse_json_list(task.output.raw)
     except Exception as e:
         logger.warning({"function": "classify_new_trends", "error": str(e)})
