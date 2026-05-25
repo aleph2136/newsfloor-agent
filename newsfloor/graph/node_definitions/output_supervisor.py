@@ -183,7 +183,7 @@ def _evaluate_with_llm(
     Reads the actual digest HTML and checks it against the engineer profile
     and the topic/focus angle it was generated from.
     """
-    llm = LLM(model=settings.bedrock_model_output_supervisor)
+    llm = LLM(model=settings.bedrock_model_output_supervisor, max_retries=1)
 
     profile = supervisor_input.engineer_profile
 

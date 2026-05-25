@@ -65,8 +65,37 @@ class DynamoDBService:
             logger.error({"method": "get_recent_runs", "error": str(e)})
             return []
 
+    def try_claim_run(self, run_id: str) -> bool:
+        """
+        Attempts to claim this run_id with a conditional DynamoDB write.
+        Returns True if the claim succeeded — this invocation should proceed.
+        Returns False if a record already exists — another invocation claimed it
+        first (e.g. an EventBridge Lambda retry after a timeout).
+
+        On unexpected DynamoDB error, returns True so the run proceeds rather
+        than being silently blocked by a transient infra issue.
+        """
+        from contracts.primitives import RunStatus
+        record = RunRecord(run_id=run_id, status=RunStatus.IN_PROGRESS)
+        try:
+            self._runs.put_item(
+                Item=record.model_dump(),
+                ConditionExpression="attribute_not_exists(run_id)",
+            )
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                logger.warning({
+                    "method":  "try_claim_run",
+                    "run_id":  run_id,
+                    "message": "Run record already exists — skipping duplicate invocation",
+                })
+                return False
+            logger.error({"method": "try_claim_run", "run_id": run_id, "error": str(e)})
+            return True  # allow run on unexpected error rather than silently blocking
+
     def put_run_record(self, record: RunRecord) -> None:
-        """writes or overwrites a run reord."""
+        """writes or overwrites a run record."""
         try:
             self._runs.put_item(Item=record.model_dump())
         except ClientError as e:

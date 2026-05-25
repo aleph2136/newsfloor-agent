@@ -178,7 +178,7 @@ def _evaluate_with_llm(
     Called only when structural checks pass — the LLM reasons about quality,
     not about hard criteria that can be checked deterministically.
     """
-    llm = LLM(model=settings.bedrock_model_input_supervisor)
+    llm = LLM(model=settings.bedrock_model_input_supervisor, max_retries=1)
 
     evaluator = Agent(
         role="Input Stage Evaluator",

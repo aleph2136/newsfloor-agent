@@ -241,7 +241,7 @@ Resources:
           SMTP_APP_TOKEN: !Ref SmtpPassword
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_HAIKU: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
-          BEDROCK_MODEL_SONNET: "bedrock/anthropic.claude-sonnet-4-6"
+          BEDROCK_MODEL_SONNET: "bedrock/us.anthropic.claude-sonnet-4-6"
           # Supervisor models — intentionally different providers to avoid monoculture
           BEDROCK_MODEL_INPUT_SUPERVISOR: "bedrock/us.amazon.nova-pro-v1:0"
           BEDROCK_MODEL_OUTPUT_SUPERVISOR: "bedrock/us.meta.llama3-3-70b-instruct-v1:0"
@@ -269,6 +269,8 @@ Resources:
       Targets:
         - Id: DigestAgentTarget
           Arn: !GetAtt DigestAgentFunction.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 0   # disable EventBridge retries — idempotency handled in handler
  
   # Permission for EventBridge to invoke the Lambda
   DigestSchedulePermission:

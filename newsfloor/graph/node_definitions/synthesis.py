@@ -67,8 +67,10 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
 
     # Sonnet for synthesis — this is the highest-value LLM call in the pipeline.
     # The digest is what the user actually reads. Worth the extra token cost.
-    llm_writer       = LLM(model=settings.bedrock_model_sonnet)
-    llm_support      = LLM(model=settings.bedrock_model_haiku)
+    # max_retries=1: one retry on transient failure, then fail fast — the graph's
+    # degraded mode handles repeated failures better than hammering a throttled API.
+    llm_writer       = LLM(model=settings.bedrock_model_sonnet, max_retries=1)
+    llm_support      = LLM(model=settings.bedrock_model_haiku,  max_retries=1)
 
     # -------------------------------------------------------------------------
     # Build shared context strings used across multiple task prompts
@@ -132,9 +134,11 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
             f"Background: {profile.background_summary} "
             "You know this person values depth over breadth, engineering precision over "
             "hype, and practical applicability over theoretical interest. "
-            "You are also aware that this person finds simple solutions more elegant and "
-            "realistic than complex ones, only introducing complexity if absolutely necessary."
-            "You write with clarity and intelligence, as one practitioner to another."
+            "You write in a conversational, down-to-earth tone — like a knowledgeable "
+            "colleague explaining something over coffee, not a textbook or a press release. "
+            "You use plain language by default and only reach for technical terms when "
+            "they genuinely add precision. You never stack jargon. You keep things "
+            "readable without dumbing them down."
         ),
         llm=llm_writer,
         verbose=False,
@@ -235,8 +239,10 @@ HTML STRUCTURE REQUIREMENTS:
   - Closing paragraph: one practical takeaway {profile.name} can act on
 
 WRITING STANDARDS:
-  - Write as one practitioner to another — no filler phrases
-  - Every sentence must earn its place
+  - Write conversationally — like a knowledgeable colleague, not a technical paper
+  - Use plain language first; reach for technical terms only when they add precision
+  - Avoid jargon stacking — if three technical words land in a row, rewrite the sentence
+  - Every sentence must earn its place, but it should also flow naturally when read aloud
   - Specificity over generality — name the pattern, technique, or tradeoff
   - Connect articles to each other where genuine connections exist
   - Do not summarize what is already in the article title{depth_note}

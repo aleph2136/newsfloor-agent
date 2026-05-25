@@ -71,6 +71,27 @@ def lambda_handler(event: dict, context) -> dict:
             }),
         }
 
+    # Idempotency guard — claim this run_id before starting.
+    # EventBridge retries Lambda async invocations up to 2 times on timeout/failure,
+    # which means a throttle-induced timeout can produce 3 separate runs and 3 emails.
+    # A conditional DynamoDB write ensures only one invocation proceeds per day.
+    try:
+        from data.db import DynamoDBService
+        if not DynamoDBService().try_claim_run(run_id):
+            logger.info(json.dumps({
+                "run_id":  run_id,
+                "message": "Run already claimed by a prior invocation — skipping",
+            }))
+            return {
+                "statusCode": 200,
+                "body": json.dumps({"run_id": run_id, "status": "skipped — already claimed"}),
+            }
+    except Exception as e:
+        logger.warning(json.dumps({
+            "run_id":  run_id,
+            "warning": f"Idempotency check failed — proceeding anyway: {e}",
+        }))
+
     try:
         final_state = digest_graph.invoke({"run_id": run_id, "rework_counts": {}})
         run_status = str(final_state.get("run_status", "unknown"))

@@ -60,7 +60,7 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
     })
  
     db  = DynamoDBService()
-    llm = LLM(model=settings.bedrock_model_haiku)
+    llm = LLM(model=settings.bedrock_model_haiku, max_retries=1)
     now = datetime.now(timezone.utc).isoformat()
  
     all_errors:                 list[str] = []

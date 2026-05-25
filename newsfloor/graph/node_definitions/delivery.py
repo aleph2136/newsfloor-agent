@@ -121,13 +121,22 @@ def _send_email(task_input: DeliveryTaskInput) -> str:
     msg.attach(MIMEText(_html_to_text(task_input.digest_html), "plain", "utf-8"))
     msg.attach(MIMEText(task_input.digest_html, "html", "utf-8"))
 
-    with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
+    # Manage the connection explicitly so that a quit() error after a successful
+    # sendmail() does not propagate and trigger a retry (which would send the
+    # email again). Only login/sendmail failures should cause a retry.
+    server = smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT)
+    try:
         server.login(task_input.sender_email, settings.smtp_app_token)
         server.sendmail(
             task_input.sender_email,
             task_input.recipient_email,
             msg.as_string(),
         )
+    finally:
+        try:
+            server.quit()
+        except smtplib.SMTPException:
+            pass
 
     return str(uuid.uuid4())
 
