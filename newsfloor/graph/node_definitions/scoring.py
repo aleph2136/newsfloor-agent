@@ -124,7 +124,7 @@ def _score_relevance(task_input: ScoringTaskInput) -> dict[str, dict]:
     Returns an empty dict on failure — _combine_scores handles missing entries
     by applying the default reputation score.
     """
-    llm = LLM(model=settings.bedrock_model_haiku)
+    llm = LLM(model=settings.bedrock_model_scoring)
 
     relevance_analyst = Agent(
         role="Relevance Analyst",
@@ -189,7 +189,7 @@ Return a JSON array where each item has exactly these fields:
     )
 
     try:
-        kickoff_crew(crew, "scoring", task_input.run_id, [settings.bedrock_model_haiku])
+        kickoff_crew(crew, "scoring", task_input.run_id, [settings.bedrock_model_scoring])
         return _parse_relevance_output(relevance_task.output.raw)
     except Exception as e:
         logger.warning({"node": "scoring", "warning": f"Relevance scoring failed: {e}"})

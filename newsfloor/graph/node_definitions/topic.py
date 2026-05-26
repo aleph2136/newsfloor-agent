@@ -67,8 +67,8 @@ def run(task_input: TopicTaskInput) -> TopicTaskResult:
  
     available_topics, exclusions = _apply_retry_adjustments(task_input)
  
-    llm = LLM(model=settings.bedrock_model_haiku)
- 
+    llm = LLM(model=settings.bedrock_model_topic)
+
     # -------------------------------------------------------------------------
     # Agent 1 — Topic Strategist
     # Selects the best topic from the available list given context.
@@ -192,7 +192,7 @@ Return a JSON object with exactly these fields:
         verbose = False,
     )
  
-    kickoff_crew(crew, "topic", task_input.run_id, [settings.bedrock_model_haiku])
+    kickoff_crew(crew, "topic", task_input.run_id, [settings.bedrock_model_topic])
 
     # Guard against CrewAI deserialization failure — output_pydantic is None
     # if the LLM returned malformed JSON or the crew failed internally.

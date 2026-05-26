@@ -256,7 +256,7 @@ def _enrich_thin_articles(
     for articles whose RSS description was too short to score well.
     Returns the full article list with thin summaries replaced.
     """
-    llm = LLM(model=settings.bedrock_model_haiku)
+    llm = LLM(model=settings.bedrock_model_fetch)
     scrape_tool = ScrapeWebsiteTool()
 
     enricher = Agent(
@@ -307,7 +307,7 @@ Use these article IDs:
     )
 
     try:
-        kickoff_crew(crew, "fetch", task_input.run_id, [settings.bedrock_model_haiku])
+        kickoff_crew(crew, "fetch", task_input.run_id, [settings.bedrock_model_fetch])
         raw_output = enrich_task.output.raw
 
         import json

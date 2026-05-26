@@ -49,11 +49,20 @@ class Settings(BaseSettings):
  
     # -------------------------------------------------------------------------
     # Bedrock model config
-    # Haiku for most nodes; can swap individual nodes to Sonnet if needed.
-    # We use Amazon Nova Pro and Meta Llama 3.3 for the supervisors to avoid Claude monoculture.
+    # - topic:    Amazon Nova Micro (lightweight structured selection task)
+    # - fetch:    Amazon Nova Lite v2 (article enrichment scraping)
+    # - scoring:  Llama 3.3 70B (relevance analysis)
+    # - synthesis writer: Sonnet (highest quality for final output)
+    # - synthesis support agents: Haiku (contextualizer + signal extractor)
+    # - trend tracker: Llama 4 Scout (signal clustering + weekly synthesis)
+    # - supervisors: Nova Pro (input) and Llama 3.3 70B (output) to avoid Claude monoculture
     # -------------------------------------------------------------------------
-    bedrock_model_haiku:  str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
-    bedrock_model_sonnet: str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
+    bedrock_model_haiku:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    bedrock_model_sonnet:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
+    bedrock_model_topic:   str = Field(default="bedrock/us.amazon.nova-micro-v1:0")
+    bedrock_model_fetch:   str = Field(default="bedrock/us.amazon.nova-2-lite-v1:0")
+    bedrock_model_scoring: str = Field(default="bedrock/us.meta.llama3-3-70b-instruct-v1:0")
+    bedrock_model_trend:   str = Field(default="bedrock/us.meta.llama4-scout-17b-instruct-v1:0")
     bedrock_model_input_supervisor:  str = Field(default="bedrock/us.amazon.nova-pro-v1:0")
     bedrock_model_output_supervisor: str = Field(default="bedrock/us.meta.llama3-3-70b-instruct-v1:0")
  
