@@ -203,13 +203,13 @@ Resources:
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
                   # Sonnet 4.6 — synthesis writer (uses cross-region inference profile)
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
-                  - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
                   # Amazon Nova Micro — topic selection
                   - "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-micro-v1:0"
                   # Amazon Nova Lite v2 — fetch article enrichment
-                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v2:0"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-lite-v2:0"
+                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0"
                   # Amazon Nova Pro — input supervisor
                   - "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0"
@@ -217,8 +217,8 @@ Resources:
                   - "arn:aws:bedrock:*::foundation-model/meta.llama3-3-70b-instruct-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama3-3-70b-instruct-v1:0"
                   # Meta Llama 4 Scout — trend tracker (signal clustering + weekly synthesis)
-                  - "arn:aws:bedrock:*::foundation-model/meta.llama4-scout-17b-16e-instruct-v1:0"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama4-scout-17b-16e-instruct-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/meta.llama4-scout-17b-instruct-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama4-scout-17b-instruct-v1:0"
  
  
   # ---------------------------------------------------------------------------
