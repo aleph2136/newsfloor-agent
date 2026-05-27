@@ -167,7 +167,7 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
     run_status = (
         RunStatus.DEGRADED
         if (all_errors or not task_input.delivery_sent)
-        else RunStatus.COMPLETE
+        else RunStatus.COMPLETED
     )
  
     run_status, errors = write_run_record(
