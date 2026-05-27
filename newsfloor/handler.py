@@ -45,7 +45,7 @@ def lambda_handler(event: dict, context) -> dict:
     event:   EventBridge event payload (not used — schedule carries no data)
     context: Lambda context object (request ID and remaining time)
     """
-    run_id = datetime.utcnow().strftime("%Y-%m-%d")
+    run_id = datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
 
     logger.info(json.dumps({
         "run_id":        run_id,

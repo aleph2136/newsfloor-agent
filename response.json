@@ -1,1 +1,1 @@
-{"statusCode": 500, "body": "{\"run_id\": \"2026-05-25\", \"status\": \"error\", \"error\": \"Request validation failed: Invocation of model ID anthropic.claude-sonnet-4-6 with on-demand throughput isn\\u2019t supported. Retry your request with the ID or ARN of an inference profile that contains this model.\"}"}
+{"statusCode": 200, "body": "{\"run_id\": \"2026-05-27\", \"status\": \"skipped \\u2014 already claimed\"}"}
