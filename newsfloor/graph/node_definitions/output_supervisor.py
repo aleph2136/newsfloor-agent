@@ -277,7 +277,7 @@ Return a JSON object with exactly these fields:
         verbose = False,
     )
 
-    kickoff_crew(crew, "output_supervisor", task_input.run_id, [settings.bedrock_model_output_supervisor])
+    kickoff_crew(crew, "output_supervisor", supervisor_input.run_id, [settings.bedrock_model_output_supervisor])
 
     if not evaluate_task.output or not evaluate_task.output.raw:
         logger.warning({

@@ -78,6 +78,7 @@ def run(task_input: TopicTaskInput) -> TopicTaskResult:
         goal=(
             "Select the most valuable topic for today's AI agentic engineering digest "
             "given recent coverage history, active trends, and the engineer's focus areas."
+            "Ensure that the topic is timely, relevant to current trends, and has not been covered recently."
         ),
         backstory=(
             "You are an expert in AI agentic architecture and engineering with a deep "
