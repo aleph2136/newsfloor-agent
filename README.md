@@ -58,10 +58,14 @@ Each step in the pipeline uses the model that makes the most sense for that task
 
 | Node | Model | Reason |
 |------|-------|--------|
-| Topic, Fetch, Scoring | Claude Haiku 4.5 | Fast and cheap — these are structured tasks |
-| Synthesis | Claude Sonnet 4.6 | The actual writing deserves higher quality |
-| Input Supervisor | Amazon Nova Pro | Deliberate diversity — avoids Claude reviewing Claude |
-| Output Supervisor | Meta Llama 3.3 70B | Same reason — independent second opinion |
+| Topic | Amazon Nova Micro | Lightweight structured selection — cheapest capable model for a constrained choice task |
+| Fetch | Amazon Nova 2 Lite | Article enrichment scraping — fast and low-cost for extracting summaries |
+| Scoring | Meta Llama 3.3 70B | Relevance analysis benefits from stronger reasoning than the fetch/topic tasks |
+| Synthesis (writer) | Claude Sonnet 4.6 | The actual writing deserves the highest quality model in the pipeline |
+| Synthesis (support) | Claude Haiku 4.5 | Trend contextualizer and signal extractor are structured extraction tasks |
+| Trend tracker | Meta Llama 4 Scout | Signal clustering and weekly synthesis — capable reasoning at low cost |
+| Input Supervisor | Amazon Nova Pro | Deliberate diversity — avoids Claude reviewing Claude's input stage |
+| Output Supervisor | Meta Llama 3.3 70B | Independent second opinion on the finished digest |
 
 Using multiple model families at the quality gates provides genuine independence. A supervisor built on the same model that wrote the content isn't a real check.
 
@@ -207,9 +211,13 @@ DYNAMODB_WEEKLY_TABLE=digest-weekly-synthesis-prod
 DYNAMODB_TRENDS_TABLE=digest-trends-prod
 DYNAMODB_SOURCES_TABLE=digest-sources-prod
 
-# Bedrock models — change these if you want to swap providers
-BEDROCK_MODEL_HAIKU=bedrock/anthropic.claude-haiku-4-5-20251001-v1:0
-BEDROCK_MODEL_SONNET=bedrock/anthropic.claude-sonnet-4-6
+# Bedrock models — change these to swap providers per node
+BEDROCK_MODEL_TOPIC=bedrock/us.amazon.nova-micro-v1:0
+BEDROCK_MODEL_FETCH=bedrock/us.amazon.nova-2-lite-v1:0
+BEDROCK_MODEL_SCORING=bedrock/us.meta.llama3-3-70b-instruct-v1:0
+BEDROCK_MODEL_SONNET=bedrock/us.anthropic.claude-sonnet-4-6
+BEDROCK_MODEL_HAIKU=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_TREND=bedrock/us.meta.llama4-scout-17b-instruct-v1:0
 BEDROCK_MODEL_INPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
 BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama3-3-70b-instruct-v1:0
 
@@ -262,8 +270,11 @@ Before deploying or running locally, you need:
 5. **Bedrock model access** — in the AWS console, navigate to Bedrock > Model access and enable:
    - Anthropic Claude Haiku 4.5
    - Anthropic Claude Sonnet 4.6
+   - Amazon Nova Micro
+   - Amazon Nova 2 Lite
    - Amazon Nova Pro
    - Meta Llama 3.3 70B Instruct
+   - Meta Llama 4 Scout
 
    Model access is per-region. Enable it in the same region you're deploying to.
 
@@ -371,7 +382,7 @@ Each test file caches its node output at `scope="module"`, so each crew runs onc
 **Run when you change:**
 - Any prompt string in `node_definitions/topic.py`, `synthesis.py`, or `scoring.py`
 - Scoring weights (`RELEVANCE_WEIGHT`, `REPUTATION_WEIGHT`) or the default threshold
-- The Bedrock model ID for any tested node (`BEDROCK_MODEL_HAIKU`, `BEDROCK_MODEL_SONNET`)
+- The Bedrock model ID for any tested node (`BEDROCK_MODEL_TOPIC`, `BEDROCK_MODEL_SCORING`, `BEDROCK_MODEL_SONNET`, `BEDROCK_MODEL_HAIKU`)
 - `config_data/profile.json` — the engineer profile is used directly in synthesis criteria
 - `config_data/topics.json` — the rotation list is checked deterministically by the topic test
 
@@ -511,7 +522,7 @@ The function has a 15-minute timeout. If it's consistently running close to the 
 4. Check that the App Password was generated for "Mail" access, not a different Google service
 
 **LLM errors in logs:**
-Bedrock model access must be enabled per-region before first use. Go to AWS console → Bedrock → Model access and enable all four models used by the pipeline.
+Bedrock model access must be enabled per-region before first use. Go to AWS console → Bedrock → Model access and enable all seven models used by the pipeline (Nova Micro, Nova 2 Lite, Nova Pro, Llama 3.3 70B, Llama 4 Scout, Claude Haiku 4.5, Claude Sonnet 4.6).
 
 **Tests fail after modifying config_data JSON files:**
 Run the manual verification command to catch syntax errors before running the test suite:
