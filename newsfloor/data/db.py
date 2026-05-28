@@ -13,7 +13,7 @@ Nothing here knows about CrewAI, LangGraph, or business logic.
 
 from __future__ import annotations
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
  
 import boto3
@@ -50,16 +50,19 @@ class DynamoDBService:
         """
         Returns all run records from the last N days, most recent first.
         Used by load_context to build recent_topics and recent_run_signals.
- 
+
         Scan is acceptable here — the table never exceeds ~30 records
         due to the 30-day TTL.
         """
-
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
         try:
             response = self._runs.scan(
-                FilterExpression=Attr("status").is_in(["complete", "degraded"])
+                FilterExpression=(
+                    Attr("status").is_in(["complete", "degraded"]) &
+                    Attr("run_id").gte(cutoff)
+                )
             )
-            records= [RunRecord(**item) for item in response.get("Items", [])]
+            records = [RunRecord(**item) for item in response.get("Items", [])]
             return sorted(records, key=lambda r: r.run_id, reverse=True)
         except ClientError as e:
             logger.error({"method": "get_recent_runs", "error": str(e)})
