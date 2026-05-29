@@ -87,9 +87,9 @@ $PROJECT_ROOT = $PSScriptRoot
 # Tiers 1–3 only — Tier 4 requires live Bedrock credentials and is opt-in.
 # -----------------------------------------------------------------------------
 if (-not $InfraOnly -and -not $SkipTests) {
-    Write-Host "[0/4] Running tests (unit, integration, tier3)..." -ForegroundColor Yellow
+    Write-Host "[0/4] Running tests (unit, integration, schema_and_assertion)..." -ForegroundColor Yellow
 
-    uv run pytest tests/unit/ tests/integration/ tests/tier3/ -q
+    uv run pytest tests/unit/ tests/integration/ tests/schema_and_assertion/ -q
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
