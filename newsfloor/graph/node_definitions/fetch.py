@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import datetime, timezone
+from itertools import zip_longest
 from urllib.parse import urlparse
 
 import feedparser
@@ -55,6 +56,11 @@ from contracts.nodes import FetchTaskInput, FetchTaskResult
 from contracts.primitives import ArticleRaw, RetryReasonCode
 
 logger = logging.getLogger(__name__)
+
+# Maximum articles taken from any single feed before moving to the next source.
+# Prevents a high-volume feed (e.g. simonwillison.net/atom/everything/) from
+# consuming the entire max_articles budget before other sources are fetched.
+_PER_SOURCE_LIMIT = 2
 
 
 class ScrapeWebsiteTool(BaseTool):
@@ -148,29 +154,45 @@ def _fetch_feeds(
     """
     Parses each RSS/Atom feed and returns a flat deduplicated list of
     ArticleRaw objects, capped at max_articles.
+
+    Articles are collected from ALL sources (up to _PER_SOURCE_LIMIT each)
+    and then interleaved round-robin so no single source dominates the final
+    list when it is trimmed to max_articles.
     """
-    articles:     list[ArticleRaw] = []
-    fetch_errors: list[str]        = []
-    seen_ids:     set[str]         = set()
+    fetch_errors: list[str]              = []
+    seen_ids:     set[str]               = set()
+    buckets:      list[list[ArticleRaw]] = []
 
     for source_url in sources:
-        if len(articles) >= max_articles:
-            break
         try:
             feed_articles, error = _parse_feed(source_url)
             if error:
                 fetch_errors.append(error)
+            bucket: list[ArticleRaw] = []
             for article in feed_articles:
+                if len(bucket) >= _PER_SOURCE_LIMIT:
+                    break
                 if article.article_id not in seen_ids:
                     seen_ids.add(article.article_id)
-                    articles.append(article)
-                if len(articles) >= max_articles:
-                    break
+                    bucket.append(article)
+            if bucket:
+                buckets.append(bucket)
         except Exception as e:
             fetch_errors.append(f"{source_url}: {str(e)}")
             logger.warning({"node": "fetch", "source": source_url, "error": str(e)})
 
-    return articles, fetch_errors
+    # Interleave round-robin: take one article at a time from each source bucket
+    # so the trimmed list contains articles from as many different sources as
+    # possible rather than front-loading whichever source appears first.
+    articles: list[ArticleRaw] = []
+    for round_items in zip_longest(*buckets):
+        for article in round_items:
+            if article is not None:
+                articles.append(article)
+        if len(articles) >= max_articles:
+            break
+
+    return articles[:max_articles], fetch_errors
 
 
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=4))
