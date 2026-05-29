@@ -168,10 +168,19 @@ Scoring guide:
   0.7 - 0.8  Clearly relevant, directly addresses topic or focus angle
   0.9 - 1.0  Highly relevant, addresses topic AND intersects active trends
 
+Rationale consistency rule:
+Your rationale must match your score. A score of 0.7 or higher means the article
+is strongly relevant — your rationale must say so clearly. Do not use hedging
+language ("tangentially", "loosely related", "could be relevant") when assigning
+a high score. If you find yourself hedging, lower the score to match the rationale.
+  Correct for score 0.85: "Directly addresses supervisor node design in LangGraph,
+    which is the core of the topic and intersects the active orchestration trend."
+  Incorrect for score 0.85: "Touches on agents and mentions orchestration in passing."
+
 Return a JSON array where each item has exactly these fields:
   "article_id": "<id>",
   "relevance_score": <float 0.0-1.0>,
-  "relevance_rationale": "<one sentence explaining the score>"
+  "relevance_rationale": "<one sentence explaining the score, consistent with the score level>"
         """,
         expected_output=(
             "A JSON array of objects with article_id, relevance_score, "

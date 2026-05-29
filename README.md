@@ -370,7 +370,16 @@ Runs the actual CrewAI crews against live Bedrock models and evaluates output qu
 | `tests/tier4/test_synthesis_quality.py` | `synthesis` | HTML structure, topic addressed, technical depth for Sam, no phantom URLs, signals are specific |
 | `tests/tier4/test_scoring_quality.py` | `scoring` | Relevant articles score higher than irrelevant, score gap > 0.3, rationales don't contradict scores |
 
-**Prerequisites:** AWS credentials with Bedrock access enabled for Claude Haiku 4.5. Tests auto-skip (via `pytest.mark.skipif`) when credentials are absent — they will not fail, they simply will not run.
+**Prerequisites:**
+
+- AWS credentials with Bedrock access enabled for Claude Haiku 4.5 (cross-region inference profile — activate in the Bedrock console, it registers as `us.anthropic.claude-haiku-4-5-20251001-v1:0`).
+- The `awscrt` package must be installed. boto3's login credential provider (used by AWS Login and similar SSO tools) requires it:
+  ```powershell
+  uv add awscrt --dev
+  ```
+  Without this, boto3 finds the cached credentials but cannot load them, causing all 29 tests to silently skip.
+
+**Expected outcome:** 29 tests run, with some passing and some potentially failing based on current prompt quality. If all 29 show as `skipped`, credentials are not resolving — run `python -c "import boto3; boto3.client('sts').get_caller_identity()"` to diagnose.
 
 ```powershell
 uv run pytest tests/tier4/ -q

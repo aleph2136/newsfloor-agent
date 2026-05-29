@@ -54,7 +54,7 @@ requires_llm = pytest.mark.skipif(
 # Judge helper
 # ---------------------------------------------------------------------------
 
-JUDGE_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+JUDGE_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def judge_output(output: dict | str, criteria: list[dict]) -> dict:

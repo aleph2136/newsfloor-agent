@@ -23,8 +23,9 @@
 # =============================================================================
 
 param(
-    [switch]$FirstRun,   # creates ECR repository on first deploy
-    [switch]$InfraOnly   # skips image build/push, just updates the CFT
+    [switch]$FirstRun,    # creates ECR repository on first deploy
+    [switch]$InfraOnly,   # skips image build/push, just updates the CFT
+    [switch]$SkipTests    # skips the pre-deploy test suite (not recommended)
 )
 
 # =============================================================================
@@ -78,6 +79,29 @@ if ($missing.Count -gt 0) {
 
 $ErrorActionPreference = "Stop"
 $PROJECT_ROOT = $PSScriptRoot
+
+
+# -----------------------------------------------------------------------------
+# STEP 0 — Run the test suite
+# Skipped for -InfraOnly (no code changes) and -SkipTests (explicit opt-out).
+# Tiers 1–3 only — Tier 4 requires live Bedrock credentials and is opt-in.
+# -----------------------------------------------------------------------------
+if (-not $InfraOnly -and -not $SkipTests) {
+    Write-Host "[0/4] Running tests (unit, integration, tier3)..." -ForegroundColor Yellow
+
+    uv run pytest tests/unit/ tests/integration/ tests/tier3/ -q
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "Tests failed. Fix failing tests before deploying." -ForegroundColor Red
+        Write-Host "To skip tests (not recommended): .\deploy.ps1 -SkipTests" -ForegroundColor Yellow
+        Write-Host ""
+        exit 1
+    }
+    Write-Host "    Tests passed." -ForegroundColor Green
+    Write-Host ""
+}
+
 
 # Resolve AWS account ID and ECR URI — needed for the image build and CFT parameter
 $ACCOUNT_ID = (aws sts get-caller-identity --query Account --output text)

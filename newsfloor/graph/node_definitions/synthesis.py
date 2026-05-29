@@ -251,12 +251,18 @@ HTML STRUCTURE REQUIREMENTS:
 
 WRITING STANDARDS:
   - Write conversationally — like a knowledgeable colleague, not a technical paper
+  - Assume deep familiarity with LangGraph, CrewAI, Pydantic, supervisor nodes, and agentic
+    design patterns. Never explain foundational concepts. No "LangGraph is a library for...",
+    no "agents are autonomous systems...", no introductory framing of any kind.
   - Use plain language first; reach for technical terms only when they add precision
   - Avoid jargon stacking — if three technical words land in a row, rewrite the sentence
   - Every sentence must earn its place, but it should also flow naturally when read aloud
   - Specificity over generality — name the pattern, technique, or tradeoff
   - Connect articles to each other where genuine connections exist
-  - Do not summarize what is already in the article title{depth_note}
+  - Do not summarize what is already in the article title
+  - Each article section must close with a concrete takeaway: a specific pattern, tradeoff,
+    or design decision the reader can apply to their own agent system — not a general
+    observation about the field{depth_note}
 
 Return the complete HTML as a string. Start with <html> and end with </html>.
         """,
@@ -279,13 +285,23 @@ ACTIVE TREND NAMES (for confirmation matching):
 
 Review the digest written in the previous task and extract:
 
-1. NEW SIGNALS: Concepts, patterns, or practices that appear in today's content
-   and are NOT already in the active trends list. Express each as a concise
-   noun phrase of 2-5 words. Examples of good signals:
-     "structured agent outputs"
-     "supervisor critic patterns"
-     "cross-agent memory sharing"
-     "tool call retry budgets"
+1. NEW SIGNALS: Specific, observable patterns or practices from today's content
+   that are NOT already in the active trends list. Each signal must describe
+   something concrete enough to track across multiple sources over time.
+   Express as a short phrase or sentence — specific enough that a reader could
+   identify an article as confirming or contradicting this signal.
+
+   Good signals (specific, observable, trackable):
+     "supervisor node pattern used to cap rework loops in production LangGraph pipelines"
+     "teams migrating from free-text LLM outputs to Pydantic-validated task contracts"
+     "hierarchical manager LLM delegating to worker agents via CrewAI process types"
+     "tool call retry budgets used to prevent runaway agent cost loops"
+
+   Bad signals (too generic — do not return these):
+     "AI agents are improving"
+     "multi-agent systems are important"
+     "better tooling is emerging for agents"
+     "LLM orchestration is a growing area"
 
 2. TREND CONFIRMATIONS: Names of active trends (from the list above) that
    today's content directly reinforces. Use the exact trend names.

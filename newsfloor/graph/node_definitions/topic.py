@@ -162,11 +162,22 @@ a specific focus angle for an engineer whose profile is:
   ])}
  
 The focus angle must:
-- Be specific enough to guide article selection and synthesis
-- Connect directly to engineering practice, not just theory
-- Relate to at least one of: governance, observability, reliability,
-  human oversight, or practical value creation
+- Name a concrete team type, production scenario, or application context
+  (e.g., "platform teams operating LLM pipelines", "teams shipping agent-based products to users")
+- Add a lens or constraint that the topic alone does not provide
+- Connect directly to engineering practice — a practitioner should be able to act on it
 - Be a single sentence starting with an action verb
+
+The focus angle must NOT:
+- Restate or paraphrase the topic using different words
+- Be semantically equivalent to the topic (a reader must be able to tell them apart)
+
+Example — topic: "multi-agent orchestration patterns"
+  BAD:  "Design orchestration patterns to coordinate multi-agent workflows effectively"
+        (restates the topic, adds nothing)
+  GOOD: "Identify which orchestration topologies let platform teams add agents incrementally
+        without destabilizing existing production pipelines"
+        (names a team type and adds a concrete engineering constraint)
  
 Return a JSON object with exactly these fields:
 {{
