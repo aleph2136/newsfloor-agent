@@ -59,9 +59,10 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
         "delivery_sent":   task_input.delivery_sent,
     })
  
-    db  = DynamoDBService()
-    llm = LLM(model=settings.bedrock_model_trend, max_retries=1)
-    now = datetime.now(timezone.utc).isoformat()
+    db         = DynamoDBService()
+    llm        = LLM(model=settings.bedrock_model_trend,        max_retries=1)
+    llm_weekly = LLM(model=settings.bedrock_model_trend_weekly, max_retries=1)
+    now        = datetime.now(timezone.utc).isoformat()
  
     all_errors:                 list[str] = []
     trends_updated:             list[str] = []
@@ -155,7 +156,7 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
     # -------------------------------------------------------------------------
     if _is_monday():
         try:
-            write_weekly_synthesis(db=db, llm=llm, now=now)
+            write_weekly_synthesis(db=db, llm=llm_weekly, now=now)
         except Exception as e:
             error_msg = f"weekly synthesis failed: {e}"
             all_errors.append(error_msg)

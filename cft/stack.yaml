@@ -196,7 +196,7 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  # Haiku 4.5 — synthesis support agents (contextualizer + signal extractor)
+                  # Haiku 4.5 — topic, scoring, synthesis support, trend weekly synthesis
                   # Wildcard region required — the us.* cross-region inference profile routes
                   # across us-east-1, us-east-2, and us-west-2 at runtime.
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -204,21 +204,18 @@ Resources:
                   # Sonnet 4.6 — synthesis writer (uses cross-region inference profile)
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
-                  # Amazon Nova Micro — topic selection
-                  - "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-micro-v1:0"
                   # Amazon Nova Lite v2 — fetch article enrichment
                   - "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0"
                   # Amazon Nova Pro — input supervisor
                   - "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0"
-                  # Meta Llama 3.3 70B — scoring (relevance analysis) + output supervisor
-                  - "arn:aws:bedrock:*::foundation-model/meta.llama3-3-70b-instruct-v1:0"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama3-3-70b-instruct-v1:0"
-                  # Meta Llama 4 Scout — trend tracker (signal clustering + weekly synthesis)
+                  # Meta Llama 4 Scout — trend signal clustering
                   - "arn:aws:bedrock:*::foundation-model/meta.llama4-scout-17b-instruct-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama4-scout-17b-instruct-v1:0"
+                  # Meta Llama 4 Maverick — output supervisor
+                  - "arn:aws:bedrock:*::foundation-model/meta.llama4-maverick-17b-instruct-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama4-maverick-17b-instruct-v1:0"
  
  
   # ---------------------------------------------------------------------------
@@ -251,13 +248,14 @@ Resources:
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_HAIKU: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_SONNET: "bedrock/us.anthropic.claude-sonnet-4-6"
-          BEDROCK_MODEL_TOPIC: "bedrock/us.amazon.nova-micro-v1:0"
-          BEDROCK_MODEL_FETCH: "bedrock/us.amazon.nova-lite-v2:0"
-          BEDROCK_MODEL_SCORING: "bedrock/us.meta.llama3-3-70b-instruct-v1:0"
-          BEDROCK_MODEL_TREND: "bedrock/us.meta.llama4-scout-17b-16e-instruct-v1:0"
+          BEDROCK_MODEL_TOPIC: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+          BEDROCK_MODEL_FETCH: "bedrock/us.amazon.nova-2-lite-v1:0"
+          BEDROCK_MODEL_SCORING: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+          BEDROCK_MODEL_TREND: "bedrock/us.meta.llama4-scout-17b-instruct-v1:0"
+          BEDROCK_MODEL_TREND_WEEKLY: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           # Supervisor models — intentionally different providers to avoid monoculture
           BEDROCK_MODEL_INPUT_SUPERVISOR: "bedrock/us.amazon.nova-pro-v1:0"
-          BEDROCK_MODEL_OUTPUT_SUPERVISOR: "bedrock/us.meta.llama3-3-70b-instruct-v1:0"
+          BEDROCK_MODEL_OUTPUT_SUPERVISOR: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"
           # AWS region passed explicitly so boto3 clients don't need to discover it
           AWS_REGION_NAME: !Ref AWS::Region
           # Lambda's filesystem is read-only except /tmp. Setting HOME=/tmp redirects

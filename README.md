@@ -48,7 +48,7 @@ The pipeline has two supervisor nodes that act as quality checkpoints:
 
 **Input Supervisor** sits between scoring and synthesis. It evaluates whether the fetched and scored articles are good enough to write a digest from. If the article quality is too low, it sends the pipeline back to re-select a topic and re-fetch. It uses Amazon Nova Pro (deliberately not Claude — see below).
 
-**Output Supervisor** sits between synthesis and delivery. It reads the draft digest and decides whether it meets the standard. If not, it routes back to synthesis for a rewrite. It uses Meta Llama 3.3 70B.
+**Output Supervisor** sits between synthesis and delivery. It reads the draft digest and decides whether it meets the standard. If not, it routes back to synthesis for a rewrite. It uses Meta Llama 4 Maverick.
 
 Both supervisors cap at two retries before forcing a proceed in degraded mode — the digest gets sent even if it's not perfect, rather than failing silently.
 
@@ -58,14 +58,15 @@ Each step in the pipeline uses the model that makes the most sense for that task
 
 | Node | Model | Reason |
 |------|-------|--------|
-| Topic | Amazon Nova Micro | Lightweight structured selection — cheapest capable model for a constrained choice task |
+| Topic | Claude Haiku 4.5 | Structured selection with rationale and confidence — drives the whole pipeline, needs reliable reasoning |
 | Fetch | Amazon Nova 2 Lite | Article enrichment scraping — fast and low-cost for extracting summaries |
-| Scoring | Meta Llama 3.3 70B | Relevance analysis benefits from stronger reasoning than the fetch/topic tasks |
+| Scoring | Claude Haiku 4.5 | Relevance classification — strong instruction-following at a fraction of the cost of a 70B model |
 | Synthesis (writer) | Claude Sonnet 4.6 | The actual writing deserves the highest quality model in the pipeline |
 | Synthesis (support) | Claude Haiku 4.5 | Trend contextualizer and signal extractor are structured extraction tasks |
-| Trend tracker | Meta Llama 4 Scout | Signal clustering and weekly synthesis — capable reasoning at low cost |
+| Trend (signals) | Meta Llama 4 Scout | Signal clustering and new trend classification — pattern recognition at low cost |
+| Trend (weekly) | Claude Haiku 4.5 | Weekly narrative synthesis — prose quality matters; runs once per week |
 | Input Supervisor | Amazon Nova Pro | Deliberate diversity — avoids Claude reviewing Claude's input stage |
-| Output Supervisor | Meta Llama 3.3 70B | Independent second opinion on the finished digest |
+| Output Supervisor | Meta Llama 4 Maverick | Independent second opinion on the finished digest — stronger reasoning than Scout for qualitative evaluation |
 
 Using multiple model families at the quality gates provides genuine independence. A supervisor built on the same model that wrote the content isn't a real check.
 
@@ -212,14 +213,15 @@ DYNAMODB_TRENDS_TABLE=digest-trends-prod
 DYNAMODB_SOURCES_TABLE=digest-sources-prod
 
 # Bedrock models — change these to swap providers per node
-BEDROCK_MODEL_TOPIC=bedrock/us.amazon.nova-micro-v1:0
+BEDROCK_MODEL_TOPIC=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_FETCH=bedrock/us.amazon.nova-2-lite-v1:0
-BEDROCK_MODEL_SCORING=bedrock/us.meta.llama3-3-70b-instruct-v1:0
+BEDROCK_MODEL_SCORING=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_SONNET=bedrock/us.anthropic.claude-sonnet-4-6
 BEDROCK_MODEL_HAIKU=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_TREND=bedrock/us.meta.llama4-scout-17b-instruct-v1:0
+BEDROCK_MODEL_TREND_WEEKLY=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_INPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
-BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama3-3-70b-instruct-v1:0
+BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 
 # Pipeline tuning (optional — these are the defaults)
 SCORE_THRESHOLD=0.5
@@ -267,16 +269,13 @@ Before deploying or running locally, you need:
    ```powershell
    aws configure
    ```
-5. **Bedrock model access** — in the AWS console, navigate to Bedrock > Model access and enable:
+5. **Bedrock model access** — AWS has deprecated the Model Access console. To activate a model, navigate to it in the Bedrock console and send a test prompt. Do this for each model in the region you're deploying to:
    - Anthropic Claude Haiku 4.5
    - Anthropic Claude Sonnet 4.6
-   - Amazon Nova Micro
    - Amazon Nova 2 Lite
    - Amazon Nova Pro
-   - Meta Llama 3.3 70B Instruct
    - Meta Llama 4 Scout
-
-   Model access is per-region. Enable it in the same region you're deploying to.
+   - Meta Llama 4 Maverick
 
 ---
 
@@ -522,7 +521,7 @@ The function has a 15-minute timeout. If it's consistently running close to the 
 4. Check that the App Password was generated for "Mail" access, not a different Google service
 
 **LLM errors in logs:**
-Bedrock model access must be enabled per-region before first use. Go to AWS console → Bedrock → Model access and enable all seven models used by the pipeline (Nova Micro, Nova 2 Lite, Nova Pro, Llama 3.3 70B, Llama 4 Scout, Claude Haiku 4.5, Claude Sonnet 4.6).
+Each Bedrock model must be activated per-region before first use. Navigate to each model in the Bedrock console and send a test prompt to activate it (Nova 2 Lite, Nova Pro, Llama 4 Scout, Llama 4 Maverick, Claude Haiku 4.5, Claude Sonnet 4.6).
 
 **Tests fail after modifying config_data JSON files:**
 Run the manual verification command to catch syntax errors before running the test suite:

@@ -49,22 +49,24 @@ class Settings(BaseSettings):
  
     # -------------------------------------------------------------------------
     # Bedrock model config
-    # - topic:    Amazon Nova Micro (lightweight structured selection task)
+    # - topic:    Claude Haiku (structured selection + rationale — drives the whole pipeline)
     # - fetch:    Amazon Nova Lite v2 (article enrichment scraping)
-    # - scoring:  Llama 3.3 70B (relevance analysis)
+    # - scoring:  Claude Haiku (relevance classification — 9x cheaper than Llama 70B, same quality)
     # - synthesis writer: Sonnet (highest quality for final output)
     # - synthesis support agents: Haiku (contextualizer + signal extractor)
-    # - trend tracker: Llama 4 Scout (signal clustering + weekly synthesis)
-    # - supervisors: Nova Pro (input) and Llama 3.3 70B (output) to avoid Claude monoculture
+    # - trend signal clustering: Llama 4 Scout (pattern recognition + structured JSON)
+    # - trend weekly synthesis: Claude Haiku (prose quality matters; runs once/week)
+    # - supervisors: Nova Pro (input) and Llama 4 Maverick (output) — cross-family to avoid monoculture
     # -------------------------------------------------------------------------
     bedrock_model_haiku:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     bedrock_model_sonnet:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
-    bedrock_model_topic:   str = Field(default="bedrock/us.amazon.nova-micro-v1:0")
+    bedrock_model_topic:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     bedrock_model_fetch:   str = Field(default="bedrock/us.amazon.nova-2-lite-v1:0")
-    bedrock_model_scoring: str = Field(default="bedrock/us.meta.llama3-3-70b-instruct-v1:0")
-    bedrock_model_trend:   str = Field(default="bedrock/us.meta.llama4-scout-17b-instruct-v1:0")
+    bedrock_model_scoring: str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    bedrock_model_trend:        str = Field(default="bedrock/us.meta.llama4-scout-17b-instruct-v1:0")
+    bedrock_model_trend_weekly: str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     bedrock_model_input_supervisor:  str = Field(default="bedrock/us.amazon.nova-pro-v1:0")
-    bedrock_model_output_supervisor: str = Field(default="bedrock/us.meta.llama3-3-70b-instruct-v1:0")
+    bedrock_model_output_supervisor: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
  
     # -------------------------------------------------------------------------
     # Pipeline tuning parameters
