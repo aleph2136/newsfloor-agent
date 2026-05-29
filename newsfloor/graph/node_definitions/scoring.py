@@ -28,16 +28,16 @@ node consumes it read-only.
 
 Combined score formula
 ──────────────────────
-  combined = (relevance × RELEVANCE_WEIGHT) + (reputation × REPUTATION_WEIGHT)
+  combined = (relevance x RELEVANCE_WEIGHT) + (reputation x REPUTATION_WEIGHT)
 
   RELEVANCE_WEIGHT  = 0.65  — content quality is the primary signal
   REPUTATION_WEIGHT = 0.35  — source credibility is a secondary modifier
 
   A highly relevant article from an unknown source (rep=0.5) scores:
-    (0.9 × 0.65) + (0.5 × 0.35) = 0.585 + 0.175 = 0.760  → passes at 0.5 threshold
+    (0.9 x 0.65) + (0.5 x 0.35) = 0.585 + 0.175 = 0.760  → passes at 0.5 threshold
 
   A low-relevance article from a trusted source (rep=0.9) scores:
-    (0.3 × 0.65) + (0.9 × 0.35) = 0.195 + 0.315 = 0.510  → marginal pass
+    (0.3 x 0.65) + (0.9 x 0.35) = 0.195 + 0.315 = 0.510  → marginal pass
 
 Rework behavior
 ───────────────
