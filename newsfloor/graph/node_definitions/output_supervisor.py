@@ -252,6 +252,8 @@ EVALUATION CRITERIA — the digest must pass ALL of these:
 5. ACTIONABLE: Does the closing takeaway give {profile.name} something
    concrete to think about or act on?
 
+6. PROPERLY CITED: Are sources cited with URLs in the correct format of 'Source: [Title] — [Author] ([URL])'?
+
 If the digest passes all criteria, return PROCEED.
 If it fails on one or more criteria, return REWORK.
 

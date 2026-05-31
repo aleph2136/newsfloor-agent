@@ -148,8 +148,6 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
             "Your output is editorial commentary for a technically sophisticated reader. "
             "A reader should come away with your analysis — and then go read the "
             "sources if they want the full picture. "
-            "Sources are always cited with URLs using the format: "
-            "'Source: [Title] — [Author] ([URL])'"
         ),
         llm=llm_writer,
         verbose=False,
@@ -263,6 +261,7 @@ WRITING STANDARDS:
   - Each article section must close with a concrete takeaway: a specific pattern, tradeoff,
     or design decision the reader can apply to their own agent system — not a general
     observation about the field{depth_note}
+  - Sources are always cited with URLs using the format: 'Source: [Title] — [Author] ([URL])'
 
 Return the complete HTML as a string. Start with <html> and end with </html>.
         """,
@@ -338,7 +337,7 @@ Return a JSON object with exactly these fields:
     if not write_task.output or not write_task.output.raw:
         raise RuntimeError("Synthesis crew write task produced no output.")
 
-    digest_html = write_task.output.raw.strip()
+    digest_html = _strip_markdown_fences(write_task.output.raw.strip())
 
     if not extract_task.output or not extract_task.output.raw:
         logger.warning({"node": "synthesis", "warning": "Signal extractor produced no output — using empty signals"})
@@ -365,6 +364,12 @@ Return a JSON object with exactly these fields:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _strip_markdown_fences(text: str) -> str:
+    """Removes ```html ... ``` or ``` ... ``` fences that LLMs sometimes wrap around HTML output."""
+    import re
+    return re.sub(r"^```(?:html)?\s*\n?(.*?)\n?```\s*$", r"\1", text, flags=re.DOTALL | re.IGNORECASE).strip()
+
 
 def _parse_signals_output(raw_output: str) -> dict:
     """
