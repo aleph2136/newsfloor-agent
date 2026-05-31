@@ -41,6 +41,7 @@ Rework behavior
 from __future__ import annotations
 import logging
 
+from bs4 import BeautifulSoup
 from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
 
@@ -262,6 +263,9 @@ WRITING STANDARDS:
     or design decision the reader can apply to their own agent system — not a general
     observation about the field{depth_note}
   - Sources are always cited with URLs using the format: 'Source: [Title] — [Author] ([URL])'
+  - Use only safe structural HTML tags (h1-h6, p, ul, ol, li, a, em, strong, code, pre,
+    blockquote, br, hr, div, span). Never include <script>, <style>, <iframe>, <object>,
+    <embed>, <form>, or inline event handlers (onclick, onerror, etc.) of any kind.
 
 Return the complete HTML as a string. Start with <html> and end with </html>.
         """,
@@ -338,6 +342,7 @@ Return a JSON object with exactly these fields:
         raise RuntimeError("Synthesis crew write task produced no output.")
 
     digest_html = _strip_markdown_fences(write_task.output.raw.strip())
+    digest_html = _sanitize_digest_html(digest_html)
 
     if not extract_task.output or not extract_task.output.raw:
         logger.warning({"node": "synthesis", "warning": "Signal extractor produced no output — using empty signals"})
@@ -364,6 +369,44 @@ Return a JSON object with exactly these fields:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+_BLOCKED_HTML_TAGS: frozenset[str] = frozenset({
+    "script", "style", "iframe", "object", "embed", "applet",
+    "form", "input", "button", "select", "textarea",
+    "noscript", "template", "svg", "math",
+    "link", "meta", "base",
+})
+
+
+def _sanitize_digest_html(html: str) -> str:
+    """
+    Removes dangerous tags and attributes from the synthesis-generated HTML.
+
+    Applied as a defense-in-depth pass after LLM generation. The LLM is
+    instructed not to emit these tags, but external article content (titles,
+    summaries) that was woven into the prompt could theoretically carry
+    injected markup through to the output.
+
+    Blocked tags are fully decomposed (tag + content removed).
+    On-event attributes (onclick, onerror, etc.) and javascript: hrefs are
+    stripped from any remaining tag. Safe structural tags are preserved as-is.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag in soup.find_all(_BLOCKED_HTML_TAGS):
+        tag.decompose()
+
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs):
+            if attr.lower().startswith("on"):
+                del tag.attrs[attr]
+            elif attr in ("href", "src", "action", "formaction"):
+                val = tag.attrs[attr]
+                if isinstance(val, str) and val.strip().lower().startswith("javascript:"):
+                    del tag.attrs[attr]
+
+    return str(soup)
+
 
 def _strip_markdown_fences(text: str) -> str:
     """Removes ```html ... ``` or ``` ... ``` fences that LLMs sometimes wrap around HTML output."""

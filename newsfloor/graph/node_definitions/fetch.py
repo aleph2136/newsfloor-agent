@@ -36,6 +36,7 @@ Rework behavior
 
 from __future__ import annotations
 import hashlib
+import html as html_stdlib
 import logging
 from datetime import datetime, timezone
 from itertools import zip_longest
@@ -226,7 +227,7 @@ def _parse_feed(source_url: str) -> tuple[list[ArticleRaw], str]:
 
         for entry in feed.entries:
             url   = entry.get("link", "")
-            title = entry.get("title", "")
+            title = _strip_html(entry.get("title", ""))
 
             if not url or not title:
                 continue
@@ -336,7 +337,7 @@ Use these article IDs:
         enriched_map: dict[str, str] = {}
         enrichments = json.loads(raw_output)
         for item in enrichments:
-            enriched_map[item["article_id"]] = item["summary"]
+            enriched_map[item["article_id"]] = _strip_html(item["summary"])
 
         # Replace summaries in the full article list
         updated = []
@@ -361,19 +362,15 @@ Use these article IDs:
 
 def _strip_html(text: str) -> str:
     """
-    Removes HTML tags from a string using a simple character scan.
-    Not a full parser — handles the common RSS description cases well enough.
+    Strips all HTML from text, returning plain content suitable for LLM consumption.
+
+    Unescapes HTML entities first (e.g. &lt;script&gt; → <script>) so that
+    entity-encoded tags are also removed rather than passed through as literals.
+    BeautifulSoup is used as a full parser rather than a regex/char-scan so
+    malformed or nested tags are handled correctly.
     """
-    result = []
-    inside_tag = False
-    for char in text:
-        if char == "<":
-            inside_tag = True
-        elif char == ">":
-            inside_tag = False
-        elif not inside_tag:
-            result.append(char)
-    return "".join(result).strip()
+    unescaped = html_stdlib.unescape(text)
+    return BeautifulSoup(unescaped, "html.parser").get_text(separator=" ", strip=True)
 
 
 def _apply_retry_adjustments(
