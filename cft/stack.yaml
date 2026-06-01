@@ -300,11 +300,11 @@ Resources:
           SMTP_RECIPIENT_EMAIL: !Ref SmtpRecipientEmail
           SMTP_APP_TOKEN: !Ref SmtpPassword
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
-          BEDROCK_MODEL_HAIKU: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
-          BEDROCK_MODEL_SONNET: "bedrock/us.anthropic.claude-sonnet-4-6"
+          BEDROCK_MODEL_SYNTHESIS_SUPPORT: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"
+          BEDROCK_MODEL_SYNTHESIS: "bedrock/us.anthropic.claude-sonnet-4-6"
           BEDROCK_MODEL_TOPIC: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_FETCH: "bedrock/us.amazon.nova-2-lite-v1:0"
-          BEDROCK_MODEL_SCORING: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+          BEDROCK_MODEL_SCORING: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"
           BEDROCK_MODEL_TREND: "bedrock/us.meta.llama4-scout-17b-instruct-v1:0"
           BEDROCK_MODEL_TREND_WEEKLY: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           # Supervisor models — intentionally different providers to avoid monoculture

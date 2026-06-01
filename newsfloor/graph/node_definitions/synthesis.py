@@ -71,8 +71,8 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
     # The digest is what the user actually reads. Worth the extra token cost.
     # max_retries=1: one retry on transient failure, then fail fast — the graph's
     # degraded mode handles repeated failures better than hammering a throttled API.
-    llm_writer       = LLM(model=settings.bedrock_model_sonnet, max_retries=1)
-    llm_support      = LLM(model=settings.bedrock_model_haiku,  max_retries=1)
+    llm_writer       = LLM(model=settings.bedrock_model_synthesis, max_retries=1)
+    llm_support      = LLM(model=settings.bedrock_model_synthesis_support,  max_retries=1)
 
     # -------------------------------------------------------------------------
     # Build shared context strings used across multiple task prompts
@@ -333,7 +333,7 @@ Return a JSON object with exactly these fields:
         verbose = False,
     )
 
-    kickoff_crew(crew, "synthesis", task_input.run_id, [settings.bedrock_model_sonnet, settings.bedrock_model_haiku])
+    kickoff_crew(crew, "synthesis", task_input.run_id, [settings.bedrock_model_synthesis, settings.bedrock_model_synthesis_support])
 
     # -------------------------------------------------------------------------
     # Parse results — guard against partial crew failure

@@ -74,3 +74,8 @@ testpaths = ["tests/unit", "tests/integration", "tests/schema_and_assertion"]
 markers = [
     "tier4: LLM-as-judge tests requiring live AWS Bedrock access (auto-skipped when credentials are absent)",
 ]
+
+[dependency-groups]
+dev = [
+    "awscrt>=0.33.0",
+]

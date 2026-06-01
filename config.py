@@ -58,11 +58,11 @@ class Settings(BaseSettings):
     # - trend weekly synthesis: Claude Haiku (prose quality matters; runs once/week)
     # - supervisors: Nova Pro (input) and Llama 4 Maverick (output) — cross-family to avoid monoculture
     # -------------------------------------------------------------------------
-    bedrock_model_haiku:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
-    bedrock_model_sonnet:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
+    bedrock_model_synthesis:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
+    bedrock_model_synthesis_support: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_topic:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     bedrock_model_fetch:   str = Field(default="bedrock/us.amazon.nova-2-lite-v1:0")
-    bedrock_model_scoring: str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    bedrock_model_scoring: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_trend:        str = Field(default="bedrock/us.meta.llama4-scout-17b-instruct-v1:0")
     bedrock_model_trend_weekly: str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
     bedrock_model_input_supervisor:  str = Field(default="bedrock/us.amazon.nova-pro-v1:0")

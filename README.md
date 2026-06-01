@@ -215,9 +215,9 @@ DYNAMODB_SOURCES_TABLE=digest-sources-prod
 # Bedrock models — change these to swap providers per node
 BEDROCK_MODEL_TOPIC=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_FETCH=bedrock/us.amazon.nova-2-lite-v1:0
-BEDROCK_MODEL_SCORING=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-BEDROCK_MODEL_SONNET=bedrock/us.anthropic.claude-sonnet-4-6
-BEDROCK_MODEL_HAIKU=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_SCORING=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
+BEDROCK_MODEL_SYNTHESIS=bedrock/us.anthropic.claude-sonnet-4-6
+BEDROCK_MODEL_SYNTHESIS_SUPPORT=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 BEDROCK_MODEL_TREND=bedrock/us.meta.llama4-scout-17b-instruct-v1:0
 BEDROCK_MODEL_TREND_WEEKLY=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_INPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
@@ -390,7 +390,7 @@ Each test file caches its node output at `scope="module"`, so each crew runs onc
 **Run when you change:**
 - Any prompt string in `node_definitions/topic.py`, `synthesis.py`, or `scoring.py`
 - Scoring weights (`RELEVANCE_WEIGHT`, `REPUTATION_WEIGHT`) or the default threshold
-- The Bedrock model ID for any tested node (`BEDROCK_MODEL_TOPIC`, `BEDROCK_MODEL_SCORING`, `BEDROCK_MODEL_SONNET`, `BEDROCK_MODEL_HAIKU`)
+- The Bedrock model ID for any tested node
 - `config_data/profile.json` — the engineer profile is used directly in synthesis criteria
 - `config_data/topics.json` — the rotation list is checked deterministically by the topic test
 
