@@ -19,3 +19,6 @@ venv/
 env/
 
 .claude
+
+/config_data/profile.json
+response.json
