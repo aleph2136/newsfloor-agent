@@ -20,5 +20,5 @@ env/
 
 .claude
 
-/config_data/profile.json
+newsfloor/config_data/*
 response.json
