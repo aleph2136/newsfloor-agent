@@ -18,7 +18,7 @@ class RunStatus(str, Enum):
     FAILED      = "failed" # could not recover
 
 class NodeName(str, Enum):
-    """ 
+    """
     Canonical names for every node in the pipeline.
     Used in gate decisions and retry instructions so nothing is
     stringly typed.
@@ -31,6 +31,7 @@ class NodeName(str, Enum):
     SYNTHESIS         = "synthesis"
     OUTPUT_SUPERVISOR = "output_supervisor"
     DELIVERY          = "delivery"
+    PUBLISH           = "publish"
     TREND             = "trend"
 
 class RetryReasonCode(str, Enum):

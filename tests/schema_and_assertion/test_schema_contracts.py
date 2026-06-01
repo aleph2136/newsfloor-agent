@@ -25,6 +25,8 @@ from contracts.nodes import (
     EngineerProfile,
     FetchTaskResult,
     OrchestratorContext,
+    PublishTaskInput,
+    PublishTaskResult,
     ScoringTaskResult,
     SynthesisTaskResult,
     TopicTaskResult,
@@ -495,3 +497,70 @@ class TestEngineerProfile:
     def test_focus_areas_can_be_empty_list(self):
         profile = EngineerProfile(**_engineer_profile(focus_areas=[]))
         assert profile.focus_areas == []
+
+
+# ---------------------------------------------------------------------------
+# PublishTaskInput / PublishTaskResult
+# ---------------------------------------------------------------------------
+
+class TestPublishContracts:
+
+    def _valid_input(self, **overrides) -> dict:
+        base = {
+            "run_id":      "2026-06-01",
+            "digest_html": "<h1>Title</h1><p>Body.</p>",
+            "topic":       "multi-agent orchestration",
+            "bucket":      "my-site.com",
+            "cf_dist_id":  "ABCDEF123",
+            "domain":      "my-site.com",
+            "author_name": "Test Author",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_publish_task_input(self):
+        task = PublishTaskInput(**self._valid_input())
+        assert task.run_id == "2026-06-01"
+        assert task.bucket == "my-site.com"
+
+    def test_missing_required_field_raises(self):
+        data = self._valid_input()
+        del data["bucket"]
+        with pytest.raises(ValidationError):
+            PublishTaskInput(**data)
+
+    def test_empty_bucket_is_valid(self):
+        task = PublishTaskInput(**self._valid_input(bucket=""))
+        assert task.bucket == ""
+
+    def test_publish_result_published_true(self):
+        result = PublishTaskResult(
+            run_id="2026-06-01",
+            published=True,
+            article_url="https://my-site.com/articles/2026-06-01.html",
+        )
+        assert result.published is True
+        assert result.skipped is False
+        assert result.error == ""
+
+    def test_publish_result_skipped(self):
+        result = PublishTaskResult(run_id="2026-06-01", published=False, skipped=True)
+        assert result.published is False
+        assert result.skipped is True
+        assert result.article_url == ""
+
+    def test_publish_result_failed(self):
+        result = PublishTaskResult(
+            run_id="2026-06-01",
+            published=False,
+            error="S3 PutObject failed: AccessDenied",
+        )
+        assert result.published is False
+        assert result.skipped is False
+        assert "AccessDenied" in result.error
+
+    def test_publish_result_defaults(self):
+        result = PublishTaskResult(run_id="r", published=True)
+        assert result.article_url == ""
+        assert result.skipped is False
+        assert result.error == ""

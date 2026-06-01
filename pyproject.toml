@@ -70,7 +70,7 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 # Default run covers deterministic tiers (unit, integration, tier3).
 # Run tests/tier4/ explicitly when making material LLM changes — see README.
-testpaths = ["tests/unit", "tests/integration", "tests/tier3"]
+testpaths = ["tests/unit", "tests/integration", "tests/schema_and_assertion"]
 markers = [
     "tier4: LLM-as-judge tests requiring live AWS Bedrock access (auto-skipped when credentials are absent)",
 ]

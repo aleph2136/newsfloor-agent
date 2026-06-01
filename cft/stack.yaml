@@ -76,6 +76,18 @@ Parameters:
     Description: >
       CloudFront distribution ID for the personal site. Used to grant the
       Lambda permission to create cache invalidations after content updates.
+
+  PersonalSiteDomain:
+    Type: String
+    Description: >
+      Custom domain for the personal site, e.g. "sam-griffith.dev" (no trailing
+      slash). Used to build canonical article URLs in the sitemap and OG tags.
+
+  PersonalSiteAuthorName:
+    Type: String
+    Description: >
+      Author name rendered in article page sidebars and article footers,
+      e.g. "Sam Griffith".
  
  
 # =============================================================================
@@ -237,6 +249,13 @@ Resources:
                   - !Sub "arn:aws:s3:::${PersonalSiteBucketName}/articles/*"
                   - !Sub "arn:aws:s3:::${PersonalSiteBucketName}/sitemap.xml"
 
+              # S3 — read articles/manifest.json (written daily, so never subject
+              # to the 90-day lifecycle expiration on the articles/ prefix)
+              - Sid: PersonalSiteReadManifest
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${PersonalSiteBucketName}/articles/manifest.json"
+
               # S3 — list articles prefix to detect existing content
               - Sid: PersonalSiteListArticles
                 Effect: Allow
@@ -296,6 +315,11 @@ Resources:
           # Lambda's filesystem is read-only except /tmp. Setting HOME=/tmp redirects
           # home-directory cache/config writes from crewai, litellm, and other libraries.
           HOME: /tmp
+          # Personal site S3 publishing
+          PERSONAL_SITE_BUCKET: !Ref PersonalSiteBucketName
+          PERSONAL_SITE_CF_DIST_ID: !Ref PersonalSiteDistributionId
+          PERSONAL_SITE_DOMAIN: !Ref PersonalSiteDomain
+          PERSONAL_SITE_AUTHOR_NAME: !Ref PersonalSiteAuthorName
       Tags:
         - Key: Project
           Value: digest-agent

@@ -19,10 +19,12 @@ newsfloor/graph/__init__.py
 newsfloor/graph/graph.py
 newsfloor/graph/nodes.py
 newsfloor/graph/state.py
+newsfloor/graph/node_definitions/crew_utils.py
 newsfloor/graph/node_definitions/delivery.py
 newsfloor/graph/node_definitions/fetch.py
 newsfloor/graph/node_definitions/input_supervisor.py
 newsfloor/graph/node_definitions/output_supervisor.py
+newsfloor/graph/node_definitions/publish.py
 newsfloor/graph/node_definitions/scoring.py
 newsfloor/graph/node_definitions/synthesis.py
 newsfloor/graph/node_definitions/topic.py

@@ -97,6 +97,7 @@ class GraphState(BaseModel):
     scoring_result:       ScoringTaskResult  | None = None
     synthesis_result:     SynthesisTaskResult| None = None
     delivery_result:      DeliveryTaskResult | None = None
+    publish_result:       PublishTaskResult  | None = None
     trend_result:         TrendTaskResult    | None = None
  
     # Supervisor decisions — one slot per supervisor
@@ -291,6 +292,30 @@ class DeliveryTaskResult(BaseModel):
     error:      str = Field(default="", description="Non-empty if sending failed.")
  
  
+# ---------------------------------------------------------------------------
+# Publish Node
+# ---------------------------------------------------------------------------
+
+class PublishTaskInput(BaseModel):
+    """Everything the Publish node needs to upload the article to the personal site."""
+    run_id:      str
+    digest_html: str
+    topic:       str
+    bucket:      str = Field(description="S3 bucket name. Empty string skips publish.")
+    cf_dist_id:  str = Field(description="CloudFront distribution ID for cache invalidation.")
+    domain:      str = Field(description="Site domain, e.g. 'sam-griffith.dev'. Used to build article URLs.")
+    author_name: str = Field(description="Author name rendered in the article template sidebar.")
+
+
+class PublishTaskResult(BaseModel):
+    """Outcome of the publish attempt."""
+    run_id:      str
+    published:   bool
+    skipped:     bool  = Field(default=False, description="True if publish was skipped due to missing config.")
+    article_url: str   = Field(default="")
+    error:       str   = Field(default="")
+
+
 # ---------------------------------------------------------------------------
 # Trend Node
 # ---------------------------------------------------------------------------

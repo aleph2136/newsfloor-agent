@@ -43,6 +43,7 @@ from nodes import (
     synthesis_node,
     output_supervisor,
     delivery_node,
+    publish_node,
     trend_node,
     route_input_supervisor,
     route_output_supervisor,
@@ -76,6 +77,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node(NodeName.SYNTHESIS.value,         synthesis_node)
     builder.add_node(NodeName.OUTPUT_SUPERVISOR.value, output_supervisor)
     builder.add_node(NodeName.DELIVERY.value,          delivery_node)
+    builder.add_node(NodeName.PUBLISH.value,           publish_node)
     builder.add_node(NodeName.TREND.value,             trend_node)
  
     # -------------------------------------------------------------------------
@@ -87,7 +89,8 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge(NodeName.FETCH.value,              NodeName.SCORING.value)
     builder.add_edge(NodeName.SCORING.value,            NodeName.INPUT_SUPERVISOR.value)
     builder.add_edge(NodeName.SYNTHESIS.value,          NodeName.OUTPUT_SUPERVISOR.value)
-    builder.add_edge(NodeName.DELIVERY.value,           NodeName.TREND.value)
+    builder.add_edge(NodeName.DELIVERY.value,           NodeName.PUBLISH.value)
+    builder.add_edge(NodeName.PUBLISH.value,            NodeName.TREND.value)
     builder.add_edge(NodeName.TREND.value,              END)
  
     # -------------------------------------------------------------------------

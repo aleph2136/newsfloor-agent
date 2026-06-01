@@ -31,6 +31,8 @@ from contracts.nodes import (
     InputSupervisorInput,
     OrchestratorContext,
     OutputSupervisorInput,
+    PublishTaskInput,
+    PublishTaskResult,
     ScoringTaskInput,
     ScoringTaskResult,
     SynthesisTaskInput,
@@ -54,6 +56,7 @@ from nodes import (
     fetch_node,
     input_supervisor,
     output_supervisor,
+    publish_node,
     scoring_node,
     synthesis_node,
     topic_node,
@@ -191,6 +194,15 @@ def mock_context(engineer_profile):
 @pytest.fixture
 def delivery_result(run_id):
     return DeliveryTaskResult(run_id=run_id, sent=True, message_id="msg-001")
+
+
+@pytest.fixture
+def publish_result(run_id):
+    return PublishTaskResult(
+        run_id=run_id,
+        published=True,
+        article_url=f"https://example.com/articles/{run_id}.html",
+    )
 
 
 @pytest.fixture
@@ -483,6 +495,86 @@ class TestDeliveryNodeWiring:
         result = delivery_node(state)
 
         assert result["delivery_result"] is delivery_result
+
+
+class TestPublishNodeWiring:
+
+    @patch("node_definitions.publish.run")
+    def test_assembles_publish_task_input(self, mock_run, run_id, topic_result, synthesis_result, publish_result):
+        mock_run.return_value = publish_result
+        with patch("nodes.settings") as mock_settings:
+            mock_settings.personal_site_bucket   = "test-bucket"
+            mock_settings.personal_site_cf_dist_id = "CF123"
+            mock_settings.personal_site_domain   = "example.com"
+            mock_settings.personal_site_author_name = "Test Author"
+            state = {
+                "run_id":           run_id,
+                "rework_counts":    {},
+                "topic_result":     topic_result,
+                "synthesis_result": synthesis_result,
+            }
+            publish_node(state)
+
+        arg = mock_run.call_args[0][0]
+        assert isinstance(arg, PublishTaskInput)
+        assert arg.run_id      == run_id
+        assert arg.digest_html == synthesis_result.digest_html
+        assert arg.topic       == topic_result.topic
+        assert arg.bucket      == "test-bucket"
+        assert arg.cf_dist_id  == "CF123"
+        assert arg.domain      == "example.com"
+        assert arg.author_name == "Test Author"
+
+    @patch("node_definitions.publish.run")
+    def test_returns_publish_result_key(self, mock_run, run_id, topic_result, synthesis_result, publish_result):
+        mock_run.return_value = publish_result
+        with patch("nodes.settings") as mock_settings:
+            mock_settings.personal_site_bucket      = "test-bucket"
+            mock_settings.personal_site_cf_dist_id  = "CF123"
+            mock_settings.personal_site_domain      = "example.com"
+            mock_settings.personal_site_author_name = "Test Author"
+            state = {
+                "run_id":           run_id,
+                "rework_counts":    {},
+                "topic_result":     topic_result,
+                "synthesis_result": synthesis_result,
+            }
+            result = publish_node(state)
+
+        assert result["publish_result"] is publish_result
+
+    @patch("node_definitions.publish.run")
+    def test_skips_gracefully_when_bucket_empty(self, mock_run, run_id, topic_result, synthesis_result):
+        """publish.run returns skipped=True when bucket is empty — no S3/CF calls made."""
+        mock_run.return_value = PublishTaskResult(run_id=run_id, published=False, skipped=True)
+        with patch("nodes.settings") as mock_settings:
+            mock_settings.personal_site_bucket      = ""
+            mock_settings.personal_site_cf_dist_id  = ""
+            mock_settings.personal_site_domain      = ""
+            mock_settings.personal_site_author_name = ""
+            state = {
+                "run_id":           run_id,
+                "rework_counts":    {},
+                "topic_result":     topic_result,
+                "synthesis_result": synthesis_result,
+            }
+            result = publish_node(state)
+
+        assert result["publish_result"].published is False
+        assert result["publish_result"].skipped is True
+
+    def test_returns_error_result_when_upstream_missing(self, run_id):
+        """publish_node degrades gracefully when synthesis_result is absent."""
+        state = {
+            "run_id":           run_id,
+            "rework_counts":    {},
+            "topic_result":     None,
+            "synthesis_result": None,
+        }
+        result = publish_node(state)
+
+        assert result["publish_result"].published is False
+        assert result["publish_result"].error != ""
 
 
 class TestTrendNodeWiring:

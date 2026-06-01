@@ -29,32 +29,71 @@ param(
 )
 
 # =============================================================================
-# CONFIG — set these environment variables before running
+# CONFIG — values are loaded from .env in the project root.
+# Shell environment variables override .env when both are present.
 # =============================================================================
-# Required:
-#   $env:NEWSFLOOR_SENDER_EMAIL        Gmail address used to send the digest
-#   $env:NEWSFLOOR_RECIPIENT_EMAIL     address the digest is delivered to
-#   $env:NEWSFLOOR_SMTP_PASSWORD       Gmail App Password (not your account password)
+# Required (.env keys):
+#   NEWSFLOOR_SENDER_EMAIL             Gmail address used to send the digest
+#   NEWSFLOOR_RECIPIENT_EMAIL          Address the digest is delivered to
+#   NEWSFLOOR_SMTP_PASSWORD            Gmail App Password (not your account password)
 #                                      Generate at: https://myaccount.google.com/apppasswords
-#   $env:NEWSFLOOR_PERSONAL_SITE_BUCKET        S3 bucket name for the personal site
-#   $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID    CloudFront distribution ID for the personal site
+#   NEWSFLOOR_PERSONAL_SITE_BUCKET     S3 bucket name for the personal site
+#   NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID CloudFront distribution ID
+#   NEWSFLOOR_PERSONAL_SITE_DOMAIN     Custom domain, e.g. "my-domain.com"
+#   NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME  Display name rendered in article pages
 #
-# Optional (defaults shown):
-#   $env:NEWSFLOOR_AWS_REGION          default: "us-east-1"
-#   $env:NEWSFLOOR_STACK_NAME          default: "newsroom-agent"
-#   $env:NEWSFLOOR_ENVIRONMENT         default: "prod"
-#   $env:NEWSFLOOR_SCHEDULE            default: "cron(0 12 * * ? *)"  (7am Eastern)
+# Optional (.env keys with defaults shown):
+#   NEWSFLOOR_AWS_REGION               default: "us-east-1"
+#   NEWSFLOOR_STACK_NAME               default: "newsroom-agent"
+#   NEWSFLOOR_ENVIRONMENT              default: "prod"
+#   NEWSFLOOR_SCHEDULE                 default: "cron(0 12 * * ? *)"  (7am Eastern)
 # =============================================================================
 
-$STACK_NAME      = if ($env:NEWSFLOOR_STACK_NAME)    { $env:NEWSFLOOR_STACK_NAME }    else { "newsroom-agent" }
-$ENVIRONMENT     = if ($env:NEWSFLOOR_ENVIRONMENT)   { $env:NEWSFLOOR_ENVIRONMENT }   else { "prod" }
-$AWS_REGION      = if ($env:NEWSFLOOR_AWS_REGION)    { $env:NEWSFLOOR_AWS_REGION }    else { "us-east-1" }
-$SENDER_EMAIL    = $env:NEWSFLOOR_SENDER_EMAIL
-$RECIPIENT_EMAIL = $env:NEWSFLOOR_RECIPIENT_EMAIL
-$SMTP_PASSWORD   = $env:NEWSFLOOR_SMTP_PASSWORD
-$SCHEDULE        = if ($env:NEWSFLOOR_SCHEDULE)      { $env:NEWSFLOOR_SCHEDULE }      else { "cron(0 12 * * ? *)" }
-$PERSONAL_SITE_BUCKET   = $env:NEWSFLOOR_PERSONAL_SITE_BUCKET
-$PERSONAL_SITE_CF_DIST  = $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID
+# ---------------------------------------------------------------------------
+# .env loader — reads KEY=VALUE pairs, strips quotes, ignores comments/blanks.
+# Shell env always wins over .env so CI/CD can override without touching the file.
+# ---------------------------------------------------------------------------
+function Read-DotEnv {
+    param([string]$Path)
+    $map = @{}
+    if (-not (Test-Path $Path)) { return $map }
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -eq '' -or $line.StartsWith('#')) { return }
+        $idx = $line.IndexOf('=')
+        if ($idx -lt 1) { return }
+        $key   = $line.Substring(0, $idx).Trim()
+        $value = $line.Substring($idx + 1).Trim()
+        if (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+            ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        $map[$key] = $value
+    }
+    return $map
+}
+
+$dotenv = Read-DotEnv (Join-Path $PSScriptRoot ".env")
+
+function Get-EnvVal {
+    param([string]$Name, [string]$Default = "")
+    $fromShell = [System.Environment]::GetEnvironmentVariable($Name)
+    if ($fromShell) { return $fromShell }
+    if ($dotenv.ContainsKey($Name)) { return $dotenv[$Name] }
+    return $Default
+}
+
+$STACK_NAME             = Get-EnvVal "NEWSFLOOR_STACK_NAME"    "newsroom-agent"
+$ENVIRONMENT            = Get-EnvVal "NEWSFLOOR_ENVIRONMENT"   "prod"
+$AWS_REGION             = Get-EnvVal "NEWSFLOOR_AWS_REGION"    "us-east-1"
+$SENDER_EMAIL           = Get-EnvVal "NEWSFLOOR_SENDER_EMAIL"
+$RECIPIENT_EMAIL        = Get-EnvVal "NEWSFLOOR_RECIPIENT_EMAIL"
+$SMTP_PASSWORD          = Get-EnvVal "NEWSFLOOR_SMTP_PASSWORD"
+$SCHEDULE               = Get-EnvVal "NEWSFLOOR_SCHEDULE"      "cron(0 12 * * ? *)"
+$PERSONAL_SITE_BUCKET   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_BUCKET"
+$PERSONAL_SITE_CF_DIST  = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID"
+$PERSONAL_SITE_DOMAIN   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_DOMAIN"
+$PERSONAL_SITE_AUTHOR   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME"
 
 # ECR repository name is derived from the environment — no env var needed
 $ECR_REPO_NAME = "digest-agent-$ENVIRONMENT"
@@ -66,20 +105,24 @@ if (-not $RECIPIENT_EMAIL)        { $missing += "NEWSFLOOR_RECIPIENT_EMAIL" }
 if (-not $SMTP_PASSWORD)          { $missing += "NEWSFLOOR_SMTP_PASSWORD" }
 if (-not $PERSONAL_SITE_BUCKET)   { $missing += "NEWSFLOOR_PERSONAL_SITE_BUCKET" }
 if (-not $PERSONAL_SITE_CF_DIST)  { $missing += "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID" }
+if (-not $PERSONAL_SITE_DOMAIN)   { $missing += "NEWSFLOOR_PERSONAL_SITE_DOMAIN" }
+if (-not $PERSONAL_SITE_AUTHOR)   { $missing += "NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME" }
 
 if ($missing.Count -gt 0) {
     Write-Host ""
-    Write-Host "ERROR: The following required environment variables are not set:" -ForegroundColor Red
+    Write-Host "ERROR: The following values are missing from .env (or shell environment):" -ForegroundColor Red
     $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     Write-Host ""
-    Write-Host "Set them before running this script. Example:" -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_SENDER_EMAIL             = "you@gmail.com"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_RECIPIENT_EMAIL          = "you@gmail.com"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_SMTP_PASSWORD            = "xxxx xxxx xxxx xxxx"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_PERSONAL_SITE_BUCKET     = "my-site-bucket"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID = "ABCDEF123456"' -ForegroundColor Yellow
+    Write-Host "Add them to .env in the project root. Example:" -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_SENDER_EMAIL             = "you@gmail.com"'        -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_RECIPIENT_EMAIL          = "you@gmail.com"'        -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_SMTP_PASSWORD            = "xxxx xxxx xxxx xxxx"'  -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_PERSONAL_SITE_BUCKET     = "my-site.com"'          -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID = "ABCDEF123456"'         -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_PERSONAL_SITE_DOMAIN     = "my-site.com"'          -ForegroundColor Yellow
+    Write-Host '  NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME= "Your Name"'            -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "SMTP_PASSWORD must be a Gmail App Password, not your regular account password." -ForegroundColor Yellow
+    Write-Host "NEWSFLOOR_SMTP_PASSWORD must be a Gmail App Password, not your account password." -ForegroundColor Yellow
     Write-Host "Generate one at: https://myaccount.google.com/apppasswords" -ForegroundColor Yellow
     Write-Host ""
     exit 1
@@ -245,6 +288,8 @@ aws cloudformation deploy `
         "ImageUri=$IMAGE_URI" `
         "PersonalSiteBucketName=$PERSONAL_SITE_BUCKET" `
         "PersonalSiteDistributionId=$PERSONAL_SITE_CF_DIST" `
+        "PersonalSiteDomain=$PERSONAL_SITE_DOMAIN" `
+        "PersonalSiteAuthorName=$PERSONAL_SITE_AUTHOR" `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -ne 0) {

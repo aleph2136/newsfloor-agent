@@ -74,7 +74,7 @@ The pipeline has two supervisor nodes that act as quality checkpoints:
 
 **Input Supervisor** sits between scoring and synthesis. It evaluates whether the fetched and scored articles are good enough to write a digest from. If the article quality is too low, it sends the pipeline back to re-select a topic and re-fetch. It uses Amazon Nova Pro (deliberately not Claude — see below).
 
-**Output Supervisor** sits between synthesis and delivery. It reads the draft digest and decides whether it meets the standard. If not, it routes back to synthesis for a rewrite. It uses Meta Llama 3.3 70B.
+**Output Supervisor** sits between synthesis and delivery. It reads the draft digest and decides whether it meets the standard. If not, it routes back to synthesis for a rewrite. It uses Meta Llama 4 Maverick.
 
 Both supervisors cap at two retries before forcing a proceed in degraded mode — the digest gets sent even if it's not perfect, rather than failing silently.
 
@@ -84,10 +84,15 @@ Each step in the pipeline uses the model that makes the most sense for that task
 
 | Node | Model | Reason |
 |------|-------|--------|
-| Topic, Fetch, Scoring | Claude Haiku 4.5 | Fast and cheap — these are structured tasks |
-| Synthesis | Claude Sonnet 4.6 | The actual writing deserves higher quality |
-| Input Supervisor | Amazon Nova Pro | Deliberate diversity — avoids Claude reviewing Claude |
-| Output Supervisor | Meta Llama 3.3 70B | Same reason — independent second opinion |
+| Topic | Claude Haiku 4.5 | Structured selection with rationale and confidence — drives the whole pipeline, needs reliable reasoning |
+| Fetch | Amazon Nova 2 Lite | Article enrichment scraping — fast and low-cost for extracting summaries |
+| Scoring | Claude Haiku 4.5 | Relevance classification — strong instruction-following at a fraction of the cost of a 70B model |
+| Synthesis (writer) | Claude Sonnet 4.6 | The actual writing deserves the highest quality model in the pipeline |
+| Synthesis (support) | Claude Haiku 4.5 | Trend contextualizer and signal extractor are structured extraction tasks |
+| Trend (signals) | Meta Llama 4 Scout | Signal clustering and new trend classification — pattern recognition at low cost |
+| Trend (weekly) | Claude Haiku 4.5 | Weekly narrative synthesis — prose quality matters; runs once per week |
+| Input Supervisor | Amazon Nova Pro | Deliberate diversity — avoids Claude reviewing Claude's input stage |
+| Output Supervisor | Meta Llama 4 Maverick | Independent second opinion on the finished digest — stronger reasoning than Scout for qualitative evaluation |
 
 Using multiple model families at the quality gates provides genuine independence. A supervisor built on the same model that wrote the content isn't a real check.
 
@@ -233,11 +238,16 @@ DYNAMODB_WEEKLY_TABLE=digest-weekly-synthesis-prod
 DYNAMODB_TRENDS_TABLE=digest-trends-prod
 DYNAMODB_SOURCES_TABLE=digest-sources-prod
 
-# Bedrock models — change these if you want to swap providers
-BEDROCK_MODEL_HAIKU=bedrock/anthropic.claude-haiku-4-5-20251001-v1:0
-BEDROCK_MODEL_SONNET=bedrock/anthropic.claude-sonnet-4-6
+# Bedrock models — change these to swap providers per node
+BEDROCK_MODEL_TOPIC=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_FETCH=bedrock/us.amazon.nova-2-lite-v1:0
+BEDROCK_MODEL_SCORING=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_SONNET=bedrock/us.anthropic.claude-sonnet-4-6
+BEDROCK_MODEL_HAIKU=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_TREND=bedrock/us.meta.llama4-scout-17b-instruct-v1:0
+BEDROCK_MODEL_TREND_WEEKLY=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
 BEDROCK_MODEL_INPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
-BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama3-3-70b-instruct-v1:0
+BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 
 # Pipeline tuning (optional — these are the defaults)
 SCORE_THRESHOLD=0.5
@@ -254,13 +264,13 @@ For **production**, set `SMTP_SENDER_EMAIL`, `SMTP_RECIPIENT_EMAIL`, and `SMTP_P
 
 ### 3. Deployment Settings (environment variables for `deploy.ps1`)
 
-Set these before running the deployment script. They control where the code is uploaded and what email addresses to use.
+Set these before running the deployment script. They control what email addresses to use and optional stack naming. The ECR repository is created automatically — no bucket name needed.
 
 ```powershell
 # Required
-$env:NEWSFLOOR_DEPLOYMENT_BUCKET = "newsroom-agent-deploy-123456789012"  # globally unique S3 bucket name
 $env:NEWSFLOOR_SENDER_EMAIL      = "digest@yourdomain.com"
 $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@yourdomain.com"
+$env:NEWSFLOOR_SMTP_PASSWORD     = "xxxx xxxx xxxx xxxx"   # Gmail App Password
 
 # Optional (these are the defaults)
 $env:NEWSFLOOR_AWS_REGION        = "us-east-1"
@@ -280,17 +290,18 @@ Before deploying or running locally, you need:
    ```powershell
    pip install uv
    ```
-3. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, IAM, S3, and CloudFormation resources
+3. **Docker Desktop** — used to build the Lambda container image
+4. **AWS CLI** — configured with credentials that have permission to create Lambda, DynamoDB, IAM, ECR, and CloudFormation resources
    ```powershell
    aws configure
    ```
-4. **Bedrock model access** — in the AWS console, navigate to Bedrock > Model access and enable:
+5. **Bedrock model access** — AWS has deprecated the Model Access console. To activate a model, navigate to it in the Bedrock console and send a test prompt. Do this for each model in the region you're deploying to:
    - Anthropic Claude Haiku 4.5
    - Anthropic Claude Sonnet 4.6
+   - Amazon Nova 2 Lite
    - Amazon Nova Pro
-   - Meta Llama 3.3 70B Instruct
-
-   Model access is per-region. Enable it in the same region you're deploying to.
+   - Meta Llama 4 Scout
+   - Meta Llama 4 Maverick
 
 ---
 
@@ -385,7 +396,16 @@ Runs the actual CrewAI crews against live Bedrock models and evaluates output qu
 | `tests/tier4/test_synthesis_quality.py` | `synthesis` | HTML structure, topic addressed, technical depth for Sam, no phantom URLs, signals are specific |
 | `tests/tier4/test_scoring_quality.py` | `scoring` | Relevant articles score higher than irrelevant, score gap > 0.3, rationales don't contradict scores |
 
-**Prerequisites:** AWS credentials with Bedrock access enabled for Claude Haiku 4.5. Tests auto-skip (via `pytest.mark.skipif`) when credentials are absent — they will not fail, they simply will not run.
+**Prerequisites:**
+
+- AWS credentials with Bedrock access enabled for Claude Haiku 4.5 (cross-region inference profile — activate in the Bedrock console, it registers as `us.anthropic.claude-haiku-4-5-20251001-v1:0`).
+- The `awscrt` package must be installed. boto3's login credential provider (used by AWS Login and similar SSO tools) requires it:
+  ```powershell
+  uv add awscrt --dev
+  ```
+  Without this, boto3 finds the cached credentials but cannot load them, causing all 29 tests to silently skip.
+
+**Expected outcome:** 29 tests run, with some passing and some potentially failing based on current prompt quality. If all 29 show as `skipped`, credentials are not resolving — run `python -c "import boto3; boto3.client('sts').get_caller_identity()"` to diagnose.
 
 ```powershell
 uv run pytest tests/tier4/ -q
@@ -396,7 +416,7 @@ Each test file caches its node output at `scope="module"`, so each crew runs onc
 **Run when you change:**
 - Any prompt string in `node_definitions/topic.py`, `synthesis.py`, or `scoring.py`
 - Scoring weights (`RELEVANCE_WEIGHT`, `REPUTATION_WEIGHT`) or the default threshold
-- The Bedrock model ID for any tested node (`BEDROCK_MODEL_HAIKU`, `BEDROCK_MODEL_SONNET`)
+- The Bedrock model ID for any tested node (`BEDROCK_MODEL_TOPIC`, `BEDROCK_MODEL_SCORING`, `BEDROCK_MODEL_SONNET`, `BEDROCK_MODEL_HAIKU`)
 - `config_data/profile.json` — the engineer profile is used directly in synthesis criteria
 - `config_data/topics.json` — the rotation list is checked deterministically by the topic test
 
@@ -418,9 +438,8 @@ uv run pytest tests/tier4/ -v -k "not quality"
 
 ### First-Time Setup
 
-**Step 1 — Set your deployment environment variables:**
+**Step 1 — Ensure Docker Desktop is running**, then set your deployment environment variables:
 ```powershell
-$env:NEWSFLOOR_DEPLOYMENT_BUCKET = "your-unique-bucket-name-here"
 $env:NEWSFLOOR_SENDER_EMAIL      = "you@gmail.com"
 $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@gmail.com"
 $env:NEWSFLOOR_SMTP_PASSWORD     = "your-app-password-here"
@@ -434,21 +453,21 @@ $env:NEWSFLOOR_SMTP_PASSWORD     = "your-app-password-here"
 ```
 
 This will:
-1. Create the S3 deployment bucket
-2. Build the deployment package (pip-compatible Linux wheels via `uv`)
-3. Upload the package to S3
+1. Create the ECR repository (`digest-agent-prod`) to store the container image
+2. Build the container image using the `Dockerfile` at the project root
+3. Push the image to ECR
 4. Deploy the CloudFormation stack (Lambda, DynamoDB tables, EventBridge schedule, IAM role)
 
 ---
 
 ### Subsequent Deploys
 
-After code or config changes:
+After code or config changes (rebuilds and pushes the image, then updates the stack):
 ```powershell
 .\deploy.ps1
 ```
 
-To update infrastructure only (no repackage):
+To update infrastructure only (no image rebuild or push):
 ```powershell
 .\deploy.ps1 -InfraOnly
 ```
@@ -472,11 +491,12 @@ aws logs tail /aws/lambda/digest-agent-prod --follow --region us-east-1
 
 ## AWS Infrastructure
 
-All infrastructure is defined in `cft/stack.yaml` and managed by CloudFormation. No resources need to be created manually after the first-run S3 bucket.
+All infrastructure is defined in `cft/stack.yaml` and managed by CloudFormation. The only resource created outside CloudFormation is the ECR repository, which `deploy.ps1 -FirstRun` creates via the AWS CLI before the first stack deploy.
 
 | Resource | Purpose |
 |----------|---------|
-| **Lambda function** | Runs the pipeline; 15-minute timeout, 1024 MB memory |
+| **ECR repository** | Stores the Lambda container image (`digest-agent-prod`) — created by `-FirstRun` |
+| **Lambda function** | Runs the pipeline as a container image; 15-minute timeout, 1024 MB memory |
 | **EventBridge rule** | Triggers Lambda on schedule (7am Eastern by default) |
 | **digest-run-records** | One record per daily run; 30-day TTL |
 | **digest-weekly-synthesis** | Weekly distilled signals; 90-day TTL |
@@ -524,7 +544,7 @@ Trend strength bands: `emerging` (0.1–0.39) → `growing` (0.4–0.64) → `st
 ## Troubleshooting
 
 **"Missing required environment variables" error on deploy:**
-Set `NEWSFLOOR_DEPLOYMENT_BUCKET`, `NEWSFLOOR_SENDER_EMAIL`, and `NEWSFLOOR_RECIPIENT_EMAIL` before running `deploy.ps1`.
+Set `NEWSFLOOR_SENDER_EMAIL`, `NEWSFLOOR_RECIPIENT_EMAIL`, and `NEWSFLOOR_SMTP_PASSWORD` before running `deploy.ps1`.
 
 **Lambda times out:**
 The function has a 15-minute timeout. If it's consistently running close to the limit, check CloudWatch logs for which node is slow. The synthesis and supervisor nodes are the most LLM-intensive. You can also reduce `FETCH_MAX_ARTICLES` (default: 10) to process fewer articles per run.
@@ -536,7 +556,7 @@ The function has a 15-minute timeout. If it's consistently running close to the 
 4. Check that the App Password was generated for "Mail" access, not a different Google service
 
 **LLM errors in logs:**
-Bedrock model access must be enabled per-region before first use. Go to AWS console → Bedrock → Model access and enable all four models used by the pipeline.
+Each Bedrock model must be activated per-region before first use. Navigate to each model in the Bedrock console and send a test prompt to activate it (Nova 2 Lite, Nova Pro, Llama 4 Scout, Llama 4 Maverick, Claude Haiku 4.5, Claude Sonnet 4.6).
 
 **Tests fail after modifying config_data JSON files:**
 Run the manual verification command to catch syntax errors before running the test suite:

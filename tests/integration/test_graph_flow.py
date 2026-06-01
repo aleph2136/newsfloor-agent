@@ -19,6 +19,7 @@ from contracts.nodes import (
     ScoringTaskResult,
     SynthesisTaskResult,
     DeliveryTaskResult,
+    PublishTaskResult,
     TrendTaskResult,
 )
 
@@ -86,6 +87,15 @@ def mock_synthesis_result():
     )
 
 @pytest.fixture
+def mock_publish_result():
+    return PublishTaskResult(
+        run_id="test-run",
+        published=True,
+        article_url="https://example.com/articles/test-run.html",
+    )
+
+
+@pytest.fixture
 def mock_trend_result():
     return TrendTaskResult(
         run_id="test-run",
@@ -106,9 +116,11 @@ def mock_trend_result():
 @patch("node_definitions.synthesis.run")
 @patch("node_definitions.output_supervisor.run")
 @patch("node_definitions.delivery.run")
+@patch("node_definitions.publish.run")
 @patch("node_definitions.trend.run")
 def test_graph_successful_happy_path(
     mock_trend,
+    mock_publish,
     mock_delivery,
     mock_output_sup,
     mock_synthesis,
@@ -123,6 +135,7 @@ def test_graph_successful_happy_path(
     mock_fetch_result,
     mock_scoring_result,
     mock_synthesis_result,
+    mock_publish_result,
     mock_trend_result,
 ):
     """
@@ -153,6 +166,7 @@ def test_graph_successful_happy_path(
     )
     
     mock_delivery.return_value = MagicMock()
+    mock_publish.return_value = mock_publish_result
     mock_trend.return_value = mock_trend_result
 
     # 2. Invoke the graph
@@ -160,7 +174,7 @@ def test_graph_successful_happy_path(
         "run_id": "happy-run-2026",
         "rework_counts": {}
     }
-    
+
     final_state = compiled_graph.invoke(initial_state)
 
     # 3. Assertions
@@ -173,12 +187,14 @@ def test_graph_successful_happy_path(
     mock_synthesis.assert_called_once()
     mock_output_sup.assert_called_once()
     mock_delivery.assert_called_once()
+    mock_publish.assert_called_once()
     mock_trend.assert_called_once()
 
     # Check final state updates
     assert final_state["run_status"] == RunStatus.COMPLETED
     assert final_state["topic_result"].topic == "multi-agent orchestration patterns"
     assert final_state["synthesis_result"].digest_html.startswith("<h1>")
+    assert final_state["publish_result"].published is True
 
 
 @patch("data.load_context.run")
@@ -189,9 +205,11 @@ def test_graph_successful_happy_path(
 @patch("node_definitions.synthesis.run")
 @patch("node_definitions.output_supervisor.run")
 @patch("node_definitions.delivery.run")
+@patch("node_definitions.publish.run")
 @patch("node_definitions.trend.run")
 def test_graph_input_rework_loop_limit(
     mock_trend,
+    mock_publish,
     mock_delivery,
     mock_output_sup,
     mock_synthesis,
@@ -206,6 +224,7 @@ def test_graph_input_rework_loop_limit(
     mock_fetch_result,
     mock_scoring_result,
     mock_synthesis_result,
+    mock_publish_result,
     mock_trend_result,
 ):
     """
@@ -243,6 +262,7 @@ def test_graph_input_rework_loop_limit(
     )
     
     mock_delivery.return_value = MagicMock()
+    mock_publish.return_value = mock_publish_result
     mock_trend.return_value = mock_trend_result
 
     # 2. Invoke the graph
@@ -250,29 +270,30 @@ def test_graph_input_rework_loop_limit(
         "run_id": "rework-loop-run",
         "rework_counts": {}
     }
-    
+
     final_state = compiled_graph.invoke(initial_state)
 
     # 3. Assertions
     # Since max reworks is 2, the loop should run:
     # Pass 1: load_context -> topic -> fetch -> scoring -> input_supervisor (returns REWORK, rework_count set to 1)
     # Pass 2: route_input_supervisor redirects to topic -> fetch -> scoring -> input_supervisor (returns REWORK, rework_count set to 2)
-    # Pass 3: route_input_supervisor sees rework_counts >= 2 -> redirects to synthesis -> output_supervisor (PROCEED) -> delivery -> trend
-    
+    # Pass 3: route_input_supervisor sees rework_counts >= 2 -> redirects to synthesis -> output_supervisor (PROCEED) -> delivery -> publish -> trend
+
     # Thus, topic_node should be called exactly 2 times
     assert mock_topic.call_count == 2
     assert mock_fetch.call_count == 2
     assert mock_scoring.call_count == 2
-    
+
     # input_supervisor should be called 2 times
     assert mock_input_sup.call_count == 2
-    
-    # synthesis, output_supervisor, delivery, and trend should be called exactly once
+
+    # synthesis, output_supervisor, delivery, publish, and trend should be called exactly once
     mock_synthesis.assert_called_once()
     mock_output_sup.assert_called_once()
     mock_delivery.assert_called_once()
+    mock_publish.assert_called_once()
     mock_trend.assert_called_once()
-    
+
     # Rework counts should be accumulated in the state
     assert final_state["rework_counts"][NodeName.INPUT_SUPERVISOR.value] == 2
     assert final_state["run_status"] == RunStatus.COMPLETED
@@ -286,9 +307,11 @@ def test_graph_input_rework_loop_limit(
 @patch("node_definitions.synthesis.run")
 @patch("node_definitions.output_supervisor.run")
 @patch("node_definitions.delivery.run")
+@patch("node_definitions.publish.run")
 @patch("node_definitions.trend.run")
 def test_graph_output_rework_loop_limit(
     mock_trend,
+    mock_publish,
     mock_delivery,
     mock_output_sup,
     mock_synthesis,
@@ -303,6 +326,7 @@ def test_graph_output_rework_loop_limit(
     mock_fetch_result,
     mock_scoring_result,
     mock_synthesis_result,
+    mock_publish_result,
     mock_trend_result,
 ):
     """
@@ -339,6 +363,7 @@ def test_graph_output_rework_loop_limit(
     )
 
     mock_delivery.return_value = MagicMock()
+    mock_publish.return_value = mock_publish_result
     mock_trend.return_value = mock_trend_result
 
     initial_state = {"run_id": "output-rework-run", "rework_counts": {}}
@@ -355,8 +380,9 @@ def test_graph_output_rework_loop_limit(
     assert mock_synthesis.call_count == 2
     assert mock_output_sup.call_count == 2
 
-    # Delivery and trend run once after the forced proceed
+    # Delivery, publish, and trend run once after the forced proceed
     mock_delivery.assert_called_once()
+    mock_publish.assert_called_once()
     mock_trend.assert_called_once()
 
     assert final_state["rework_counts"][NodeName.OUTPUT_SUPERVISOR.value] == 2
@@ -371,9 +397,11 @@ def test_graph_output_rework_loop_limit(
 @patch("node_definitions.synthesis.run")
 @patch("node_definitions.output_supervisor.run")
 @patch("node_definitions.delivery.run")
+@patch("node_definitions.publish.run")
 @patch("node_definitions.trend.run")
 def test_graph_both_supervisors_rework_once(
     mock_trend,
+    mock_publish,
     mock_delivery,
     mock_output_sup,
     mock_synthesis,
@@ -388,6 +416,7 @@ def test_graph_both_supervisors_rework_once(
     mock_fetch_result,
     mock_scoring_result,
     mock_synthesis_result,
+    mock_publish_result,
     mock_trend_result,
 ):
     """
@@ -446,6 +475,7 @@ def test_graph_both_supervisors_rework_once(
     ]
 
     mock_delivery.return_value = MagicMock()
+    mock_publish.return_value = mock_publish_result
     mock_trend.return_value = mock_trend_result
 
     initial_state = {"run_id": "both-rework-run", "rework_counts": {}}
@@ -463,6 +493,7 @@ def test_graph_both_supervisors_rework_once(
 
     # Terminal nodes run exactly once
     mock_delivery.assert_called_once()
+    mock_publish.assert_called_once()
     mock_trend.assert_called_once()
 
     # Verify both supervisors accumulated their rework counts independently

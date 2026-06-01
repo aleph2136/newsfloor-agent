@@ -327,6 +327,48 @@ def delivery_node(state: DigestGraphState) -> dict:
     return {"delivery_result": result}
 
 # ---------------------------------------------------------------------------
+# publish_node
+# Uploads the article to S3, updates the manifest, regenerates index.html
+# and sitemap.xml, then invalidates CloudFront. Runs after delivery.
+# Always proceeds to trend_node regardless of publish success.
+# ---------------------------------------------------------------------------
+
+def publish_node(state: DigestGraphState) -> dict:
+    logger.info({"node": "publish", "run_id": state["run_id"]})
+
+    synthesis_result = state.get("synthesis_result")
+    topic_result     = state.get("topic_result")
+
+    if not synthesis_result or not topic_result:
+        logger.warning({
+            "node":    "publish",
+            "run_id":  state["run_id"],
+            "message": "Missing synthesis or topic result — skipping publish",
+        })
+        from contracts.nodes import PublishTaskResult
+        return {"publish_result": PublishTaskResult(
+            run_id=state["run_id"], published=False,
+            error="Missing upstream synthesis or topic result",
+        )}
+
+    from node_definitions.publish import run as publish_run
+    from contracts.nodes import PublishTaskInput
+
+    task_input = PublishTaskInput(
+        run_id      = state["run_id"],
+        digest_html = synthesis_result.digest_html,
+        topic       = topic_result.topic,
+        bucket      = settings.personal_site_bucket,
+        cf_dist_id  = settings.personal_site_cf_dist_id,
+        domain      = settings.personal_site_domain,
+        author_name = settings.personal_site_author_name,
+    )
+
+    result = publish_run(task_input)
+    return {"publish_result": result}
+
+
+# ---------------------------------------------------------------------------
 # trend_node
 # Updates DynamoDB. Always runs — failure here never blocks delivery.
 # ---------------------------------------------------------------------------

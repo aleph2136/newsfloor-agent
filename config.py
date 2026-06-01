@@ -93,11 +93,21 @@ class Settings(BaseSettings):
  
     # Source reputation
     reputation_recency_weight: float = Field(default=0.2)  # how much a new article shifts domain score
- 
+
     # Topic rotation — how many recent topics to exclude from selection
     topic_recency_window: int = Field(default=14)     # days
- 
- 
+
+    # -------------------------------------------------------------------------
+    # Personal site publishing (S3 + CloudFront)
+    # Set these to enable the publish node. If personal_site_bucket is empty
+    # the publish node skips gracefully — useful while the site is not yet live.
+    # -------------------------------------------------------------------------
+    personal_site_bucket:      str = Field(default="")   # e.g. "mysite.com"
+    personal_site_cf_dist_id:  str = Field(default="")   # CloudFront distribution ID
+    personal_site_domain:      str = Field(default="")   # e.g. "mysite.com"
+    personal_site_author_name: str = Field(default="")   # e.g. "Tester O'Testigan"
+
+
 # Single shared instance — import this everywhere
 settings = Settings()
  

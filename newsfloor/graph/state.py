@@ -31,6 +31,7 @@ from contracts.nodes import (
     ScoringTaskResult,
     SynthesisTaskResult,
     DeliveryTaskResult,
+    PublishTaskResult,
     TrendTaskResult,
 )
 
@@ -74,6 +75,7 @@ class DigestGraphState(TypedDict):
     scoring_result:   ScoringTaskResult   | None
     synthesis_result: SynthesisTaskResult | None
     delivery_result:  DeliveryTaskResult  | None
+    publish_result:   PublishTaskResult   | None
     trend_result:     TrendTaskResult     | None
 
     # Supervisor decisions - one slot per supervisor
