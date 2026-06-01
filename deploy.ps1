@@ -36,6 +36,8 @@ param(
 #   $env:NEWSFLOOR_RECIPIENT_EMAIL     address the digest is delivered to
 #   $env:NEWSFLOOR_SMTP_PASSWORD       Gmail App Password (not your account password)
 #                                      Generate at: https://myaccount.google.com/apppasswords
+#   $env:NEWSFLOOR_PERSONAL_SITE_BUCKET        S3 bucket name for the personal site
+#   $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID    CloudFront distribution ID for the personal site
 #
 # Optional (defaults shown):
 #   $env:NEWSFLOOR_AWS_REGION          default: "us-east-1"
@@ -51,15 +53,19 @@ $SENDER_EMAIL    = $env:NEWSFLOOR_SENDER_EMAIL
 $RECIPIENT_EMAIL = $env:NEWSFLOOR_RECIPIENT_EMAIL
 $SMTP_PASSWORD   = $env:NEWSFLOOR_SMTP_PASSWORD
 $SCHEDULE        = if ($env:NEWSFLOOR_SCHEDULE)      { $env:NEWSFLOOR_SCHEDULE }      else { "cron(0 12 * * ? *)" }
+$PERSONAL_SITE_BUCKET   = $env:NEWSFLOOR_PERSONAL_SITE_BUCKET
+$PERSONAL_SITE_CF_DIST  = $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID
 
 # ECR repository name is derived from the environment — no env var needed
 $ECR_REPO_NAME = "digest-agent-$ENVIRONMENT"
 
 # Validate required variables
 $missing = @()
-if (-not $SENDER_EMAIL)    { $missing += "NEWSFLOOR_SENDER_EMAIL" }
-if (-not $RECIPIENT_EMAIL) { $missing += "NEWSFLOOR_RECIPIENT_EMAIL" }
-if (-not $SMTP_PASSWORD)   { $missing += "NEWSFLOOR_SMTP_PASSWORD" }
+if (-not $SENDER_EMAIL)           { $missing += "NEWSFLOOR_SENDER_EMAIL" }
+if (-not $RECIPIENT_EMAIL)        { $missing += "NEWSFLOOR_RECIPIENT_EMAIL" }
+if (-not $SMTP_PASSWORD)          { $missing += "NEWSFLOOR_SMTP_PASSWORD" }
+if (-not $PERSONAL_SITE_BUCKET)   { $missing += "NEWSFLOOR_PERSONAL_SITE_BUCKET" }
+if (-not $PERSONAL_SITE_CF_DIST)  { $missing += "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID" }
 
 if ($missing.Count -gt 0) {
     Write-Host ""
@@ -67,9 +73,11 @@ if ($missing.Count -gt 0) {
     $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     Write-Host ""
     Write-Host "Set them before running this script. Example:" -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_SENDER_EMAIL      = "you@gmail.com"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_RECIPIENT_EMAIL   = "you@gmail.com"' -ForegroundColor Yellow
-    Write-Host '  $env:NEWSFLOOR_SMTP_PASSWORD     = "xxxx xxxx xxxx xxxx"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_SENDER_EMAIL             = "you@gmail.com"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_RECIPIENT_EMAIL          = "you@gmail.com"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_SMTP_PASSWORD            = "xxxx xxxx xxxx xxxx"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_PERSONAL_SITE_BUCKET     = "my-site-bucket"' -ForegroundColor Yellow
+    Write-Host '  $env:NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID = "ABCDEF123456"' -ForegroundColor Yellow
     Write-Host ""
     Write-Host "SMTP_PASSWORD must be a Gmail App Password, not your regular account password." -ForegroundColor Yellow
     Write-Host "Generate one at: https://myaccount.google.com/apppasswords" -ForegroundColor Yellow
@@ -235,6 +243,8 @@ aws cloudformation deploy `
         "ScheduleExpression=$SCHEDULE" `
         "Environment=$ENVIRONMENT" `
         "ImageUri=$IMAGE_URI" `
+        "PersonalSiteBucketName=$PERSONAL_SITE_BUCKET" `
+        "PersonalSiteDistributionId=$PERSONAL_SITE_CF_DIST" `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -ne 0) {

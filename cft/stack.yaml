@@ -64,6 +64,18 @@ Parameters:
     Default: "prod"
     AllowedValues: ["prod", "dev"]
     Description: Used to namespace resource names so dev and prod can coexist.
+
+  PersonalSiteBucketName:
+    Type: String
+    Description: >
+      S3 bucket name for the personal site. Used to grant the Lambda write
+      access for article uploads and sitemap updates.
+
+  PersonalSiteDistributionId:
+    Type: String
+    Description: >
+      CloudFront distribution ID for the personal site. Used to grant the
+      Lambda permission to create cache invalidations after content updates.
  
  
 # =============================================================================
@@ -216,6 +228,29 @@ Resources:
                   # Meta Llama 4 Maverick — output supervisor
                   - "arn:aws:bedrock:*::foundation-model/meta.llama4-maverick-17b-instruct-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.meta.llama4-maverick-17b-instruct-v1:0"
+
+              # S3 — personal site article uploads and sitemap
+              - Sid: PersonalSiteArticleUpload
+                Effect: Allow
+                Action: s3:PutObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${PersonalSiteBucketName}/articles/*"
+                  - !Sub "arn:aws:s3:::${PersonalSiteBucketName}/sitemap.xml"
+
+              # S3 — list articles prefix to detect existing content
+              - Sid: PersonalSiteListArticles
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub "arn:aws:s3:::${PersonalSiteBucketName}"
+                Condition:
+                  StringLike:
+                    s3:prefix: "articles/*"
+
+              # CloudFront — invalidate cache after content updates
+              - Sid: PersonalSiteCFInvalidate
+                Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${PersonalSiteDistributionId}"
  
  
   # ---------------------------------------------------------------------------

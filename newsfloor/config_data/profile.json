@@ -1,5 +1,5 @@
 {
-  "name": "Sam",
+  "name": "",
   "focus_areas": [
     "AI agentic architecture",
     "AI agentic engineering",
@@ -10,6 +10,6 @@
     "agentic tools that create real value for people",
     "cloud-agnostic infrastructure for AI workloads"
   ],
-  "background_summary": "Senior engineer transitioning into AI agentic architecture and engineering. Strong foundation in cloud infrastructure, distributed systems, Node.js, TypeScript, and Java from a multi-year communications platform modernization project. Now focused on the architecture, design, and governance of AI agent systems — particularly how to build agentic pipelines that are observable, reliable, and well-governed without being fragile or opaque. Deeply interested in how agentic systems can be structured to create genuinely useful and powerful tools for people, and in the engineering discipline required to make them trustworthy at scale. Cloud-agnostic in approach — infrastructure choices should serve the system, not constrain it. Applying an engineering mindset to the full stack of agentic concerns: orchestration patterns, supervisor design, state management, tool use, human oversight, and the emerging best practices that separate production-grade agents from demos.",
-  "experience_level": "senior engineer specializing in AI agentic architecture and engineering, with focus on governance, observability, and building reliable systems that create real value for people"
+  "background_summary": "",
+  "experience_level": ""
 }
