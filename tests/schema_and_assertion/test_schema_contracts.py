@@ -61,9 +61,10 @@ def _article_scored(**overrides) -> dict:
         "summary": "Article summary here.",
         "relevance_score": 0.8,
         "reputation_score": 0.7,
-        "combined_score": 0.755,
+        "recency_score": 0.5,
+        "combined_score": 0.64,
         "passed_threshold": True,
-        "score_rationale": "Relevance 0.80 × 0.65 + Reputation 0.70 × 0.35 = 0.755 (pass).",
+        "score_rationale": "Relevance 0.80 x 0.55 + Reputation 0.70 x 0.25 + Recency 0.50 x 0.20 = 0.64 (pass).",
     }
     base.update(overrides)
     return base
@@ -174,6 +175,14 @@ class TestArticleScored:
     def test_passed_threshold_false_is_valid(self):
         a = ArticleScored(**_article_scored(passed_threshold=False))
         assert a.passed_threshold is False
+
+    def test_recency_score_above_1_raises(self):
+        with pytest.raises(ValidationError):
+            ArticleScored(**_article_scored(recency_score=1.01))
+
+    def test_recency_score_below_0_raises(self):
+        with pytest.raises(ValidationError):
+            ArticleScored(**_article_scored(recency_score=-0.01))
 
 
 # ---------------------------------------------------------------------------

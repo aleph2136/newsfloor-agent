@@ -1,12 +1,13 @@
 # tests/unit/test_fetch_sanitization.py
 #
-# Unit tests for the _strip_html helper in fetch.py.
+# Unit tests for the _strip_html helper and _parse_feed date-sort behavior in fetch.py.
 # Verifies that externally-fetched article content is fully sanitized
 # before being passed to the LLM — including entity-encoded tags.
 
 import pytest
+from unittest.mock import MagicMock, patch
 
-from node_definitions.fetch import _strip_html
+from node_definitions.fetch import _strip_html, _parse_feed
 
 
 # ---------------------------------------------------------------------------
@@ -99,3 +100,100 @@ class TestStripHtmlMalformed:
         # Malformed but should not raise
         result = _strip_html("<p Truncated content")
         assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# _parse_feed date sort
+# ---------------------------------------------------------------------------
+
+class _FeedEntry:
+    """Minimal feedparser-compatible entry for testing."""
+    def __init__(self, url: str, title: str, summary: str, published_tuple):
+        self._data = {"link": url, "title": title, "summary": summary}
+        self.published_parsed = published_tuple
+
+    def get(self, key, default=""):
+        return self._data.get(key, default)
+
+
+def _make_fake_feed(entries):
+    feed = MagicMock()
+    feed.bozo = False
+    feed.entries = entries
+    return feed
+
+
+class TestParseFeedDateSort:
+    """_parse_feed returns articles sorted newest-published-first, regardless of feed entry order."""
+
+    @patch("node_definitions.fetch.feedparser.parse")
+    @patch("node_definitions.fetch.httpx.get")
+    def test_entries_sorted_newest_first(self, mock_http, mock_feedparser):
+        old_entry = _FeedEntry(
+            "https://example.com/old", "Old Article", "Old summary.",
+            (2024, 1, 1, 0, 0, 0),
+        )
+        new_entry = _FeedEntry(
+            "https://example.com/new", "New Article", "New summary.",
+            (2026, 5, 1, 0, 0, 0),
+        )
+        mock_http.return_value = MagicMock(text="<xml/>", status_code=200)
+        mock_feedparser.return_value = _make_fake_feed([old_entry, new_entry])
+
+        articles, error = _parse_feed("https://example.com/feed.xml")
+
+        assert error == ""
+        assert len(articles) == 2
+        assert articles[0].title == "New Article"
+        assert articles[1].title == "Old Article"
+
+    @patch("node_definitions.fetch.feedparser.parse")
+    @patch("node_definitions.fetch.httpx.get")
+    def test_already_sorted_feed_unchanged(self, mock_http, mock_feedparser):
+        first_entry = _FeedEntry(
+            "https://example.com/first", "First Article", "First summary.",
+            (2026, 5, 15, 0, 0, 0),
+        )
+        second_entry = _FeedEntry(
+            "https://example.com/second", "Second Article", "Second summary.",
+            (2026, 4, 1, 0, 0, 0),
+        )
+        mock_http.return_value = MagicMock(text="<xml/>", status_code=200)
+        mock_feedparser.return_value = _make_fake_feed([first_entry, second_entry])
+
+        articles, error = _parse_feed("https://example.com/feed.xml")
+
+        assert articles[0].title == "First Article"
+        assert articles[1].title == "Second Article"
+
+    @patch("node_definitions.fetch.feedparser.parse")
+    @patch("node_definitions.fetch.httpx.get")
+    def test_undated_entry_sorted_last(self, mock_http, mock_feedparser):
+        undated = _FeedEntry(
+            "https://example.com/undated", "Undated Article", "No date.", None
+        )
+        dated = _FeedEntry(
+            "https://example.com/dated", "Dated Article", "Has a date.",
+            (2025, 6, 1, 0, 0, 0),
+        )
+        mock_http.return_value = MagicMock(text="<xml/>", status_code=200)
+        mock_feedparser.return_value = _make_fake_feed([undated, dated])
+
+        articles, error = _parse_feed("https://example.com/feed.xml")
+
+        assert articles[0].title == "Dated Article"
+        assert articles[1].title == "Undated Article"
+
+    @patch("node_definitions.fetch.feedparser.parse")
+    @patch("node_definitions.fetch.httpx.get")
+    def test_multiple_undated_entries_all_present(self, mock_http, mock_feedparser):
+        entries = [
+            _FeedEntry("https://example.com/a", "Article A", "Summary A.", None),
+            _FeedEntry("https://example.com/b", "Article B", "Summary B.", None),
+        ]
+        mock_http.return_value = MagicMock(text="<xml/>", status_code=200)
+        mock_feedparser.return_value = _make_fake_feed(entries)
+
+        articles, error = _parse_feed("https://example.com/feed.xml")
+
+        assert len(articles) == 2

@@ -185,6 +185,10 @@ def _extract_excerpt(digest_html: str) -> str:
     match = re.search(r"<p[^>]*>(.*?)</p>", digest_html, re.IGNORECASE | re.DOTALL)
     if match:
         text = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+        parts = re.split(r'(?<=\.)\s+', text)
+        # Take the first two sentences if possible, otherwise truncate to 160 chars
+        if len(parts) >= 2:
+            return " ".join(parts[:2])
         return text[:160]
     return ""
 

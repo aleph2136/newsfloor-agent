@@ -28,16 +28,22 @@ node consumes it read-only.
 
 Combined score formula
 ──────────────────────
-  combined = (relevance x RELEVANCE_WEIGHT) + (reputation x REPUTATION_WEIGHT)
+  combined = (relevance x RELEVANCE_WEIGHT) + (reputation x REPUTATION_WEIGHT) + (recency x RECENCY_WEIGHT)
 
-  RELEVANCE_WEIGHT  = 0.65  — content quality is the primary signal
-  REPUTATION_WEIGHT = 0.35  — source credibility is a secondary modifier
+  RELEVANCE_WEIGHT  = 0.55  — content quality is the primary signal
+  REPUTATION_WEIGHT = 0.25  — source credibility is a secondary modifier
+  RECENCY_WEIGHT    = 0.20  — publication age biases toward recent articles
 
-  A highly relevant article from an unknown source (rep=0.5) scores:
-    (0.9 x 0.65) + (0.5 x 0.35) = 0.585 + 0.175 = 0.760  → passes at 0.5 threshold
+  Recency score buckets: 0-7d=1.0, 8-30d=0.75, 31-90d=0.5, 91-180d=0.25, >180d=0.1, no date=0.5
 
-  A low-relevance article from a trusted source (rep=0.9) scores:
-    (0.3 x 0.65) + (0.9 x 0.35) = 0.195 + 0.315 = 0.510  → marginal pass
+  A highly relevant fresh article (rel=0.9, rep=0.5, recency=1.0):
+    (0.9 x 0.55) + (0.5 x 0.25) + (1.0 x 0.20) = 0.495 + 0.125 + 0.200 = 0.820  → passes
+
+  A highly relevant old article (rel=0.9, rep=0.5, recency=0.1):
+    (0.9 x 0.55) + (0.5 x 0.25) + (0.1 x 0.20) = 0.495 + 0.125 + 0.020 = 0.640  → still passes
+
+  A marginal old article (rel=0.55, rep=0.5, recency=0.1):
+    (0.55 x 0.55) + (0.5 x 0.25) + (0.1 x 0.20) = 0.303 + 0.125 + 0.020 = 0.448  → filtered at 0.5
 
 Rework behavior
 ───────────────
@@ -49,6 +55,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime, timezone
 
 from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
@@ -64,6 +71,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_REPUTATION = settings.scoring_default_reputation
 RELEVANCE_WEIGHT   = settings.scoring_relevance_weight
 REPUTATION_WEIGHT  = settings.scoring_reputation_weight
+RECENCY_WEIGHT     = settings.scoring_recency_weight
 
 
 def run(task_input: ScoringTaskInput) -> ScoringTaskResult:
@@ -235,11 +243,42 @@ def _parse_relevance_output(raw_output: str) -> dict[str, dict]:
 # Step 2 — Deterministic combination
 # ---------------------------------------------------------------------------
 
+def _compute_recency_score(published_at: str, now: datetime | None = None) -> float:
+    """
+    Returns a recency score in [0.1, 1.0] based on article age.
+    Articles with no parseable date score neutrally (0.5).
+
+    Buckets: 0-7d=1.0, 8-30d=0.75, 31-90d=0.5, 91-180d=0.25, >180d=0.1
+    """
+    if not published_at:
+        return 0.5
+    try:
+        pub_dt = datetime.fromisoformat(published_at)
+        if pub_dt.tzinfo is None:
+            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        ref = now or datetime.now(timezone.utc)
+        age_days = (ref - pub_dt).days
+    except (ValueError, TypeError):
+        return 0.5
+
+    if age_days <= 7:
+        return 1.0
+    elif age_days <= 30:
+        return 0.75
+    elif age_days <= 90:
+        return 0.5
+    elif age_days <= 180:
+        return 0.25
+    else:
+        return 0.1
+
+
 def _combine_scores(
     articles:         list[ArticleRaw],
     relevance_scores: dict[str, dict],
     reputation_map:   dict[str, float],
     score_threshold:  float,
+    _now:             datetime | None = None,
 ) -> list[ArticleScored]:
     """
     Combines LLM relevance scores with reputation map values using the
@@ -257,9 +296,12 @@ def _combine_scores(
         relevance_rationale = relevance_data.get("relevance_rationale", "Fallback — relevance not scored.")
 
         reputation_score = reputation_map.get(article.source_domain, DEFAULT_REPUTATION)
+        recency_score    = _compute_recency_score(article.published_at, _now)
 
         combined_score = round(
-            (relevance_score * RELEVANCE_WEIGHT) + (reputation_score * REPUTATION_WEIGHT),
+            (relevance_score * RELEVANCE_WEIGHT)
+            + (reputation_score * REPUTATION_WEIGHT)
+            + (recency_score * RECENCY_WEIGHT),
             4,
         )
         passed = combined_score >= score_threshold
@@ -267,7 +309,8 @@ def _combine_scores(
         # Rationale constructed from actual numbers — honest and auditable
         score_rationale = (
             f"Relevance {relevance_score:.2f} × {RELEVANCE_WEIGHT} + "
-            f"Reputation {reputation_score:.2f} × {REPUTATION_WEIGHT} "
+            f"Reputation {reputation_score:.2f} × {REPUTATION_WEIGHT} + "
+            f"Recency {recency_score:.2f} × {RECENCY_WEIGHT} "
             f"= {combined_score:.2f} ({'pass' if passed else 'fail'} at {score_threshold}). "
             f"{relevance_rationale}"
         )
@@ -281,6 +324,7 @@ def _combine_scores(
             summary          = article.summary,
             relevance_score  = relevance_score,
             reputation_score = reputation_score,
+            recency_score    = recency_score,
             combined_score   = combined_score,
             passed_threshold = passed,
             score_rationale  = score_rationale,

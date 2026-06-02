@@ -79,8 +79,9 @@ class Settings(BaseSettings):
  
     # Scoring node
     score_threshold:            float = Field(default=0.5)   # minimum combined score to pass
-    scoring_relevance_weight:   float = Field(default=0.65)  # weight for content relevance in combined score
-    scoring_reputation_weight:  float = Field(default=0.35)  # weight for source reputation in combined score
+    scoring_relevance_weight:   float = Field(default=0.55)  # weight for content relevance in combined score
+    scoring_reputation_weight:  float = Field(default=0.25)  # weight for source reputation in combined score
+    scoring_recency_weight:     float = Field(default=0.20)  # weight for article age in combined score
     scoring_default_reputation: float = Field(default=0.5)   # fallback reputation for unknown sources
  
     # Orchestrator gate

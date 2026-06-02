@@ -87,6 +87,7 @@ class ArticleScored(BaseModel):
  
     relevance_score:    float = Field(ge=0.0, le=1.0, description="How relevant to today's topic and focus angle.")
     reputation_score:   float = Field(ge=0.0, le=1.0, description="Source domain reputation at time of scoring.")
+    recency_score:      float = Field(ge=0.0, le=1.0, description="Age-based score. 1.0 = <7 days, decays to 0.1 for >180 days.")
     combined_score:     float = Field(ge=0.0, le=1.0, description="Weighted combination used for filtering.")
     passed_threshold:   bool  = Field(description="True if combined_score meets the orchestrator's minimum.")
     score_rationale:    str   = Field(description="One sentence explaining the combined score.")

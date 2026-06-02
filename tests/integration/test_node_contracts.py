@@ -49,7 +49,6 @@ from contracts.primitives import (
     RunStatus,
     SupervisorDecision,
     SupervisorRoute,
-    TrendStrength,
 )
 from nodes import (
     delivery_node,
@@ -116,6 +115,7 @@ def article_scored():
         summary="A deep dive into reliability patterns for agentic pipelines.",
         relevance_score=0.85,
         reputation_score=0.70,
+        recency_score=1.0,
         combined_score=0.80,
         passed_threshold=True,
         score_rationale="Directly relevant to topic with trusted source.",

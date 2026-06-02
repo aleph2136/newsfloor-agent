@@ -111,6 +111,21 @@ class TestExtractExcerpt:
         html = "<p>Short text.</p>"
         assert _extract_excerpt(html) == "Short text."
 
+    def test_returns_only_first_two_sentences_if_available(self):
+        html = "<p>This is the first sentence. This is the second sentence. This is the third sentence.</p>"
+        result = _extract_excerpt(html)
+        assert result == "This is the first sentence. This is the second sentence."
+
+    def test_returns_fragment_if_no_periods(self):
+        html = "<p>This is a fragment without a period</p>"
+        result = _extract_excerpt(html)
+        assert result == "This is a fragment without a period"
+
+    def test_returns_one_sentence_and_one_fragment_if_only_one_period(self):
+        html = "<p>This is the first sentence. This is a fragment without a period</p>"
+        result = _extract_excerpt(html)
+        assert result == "This is the first sentence. This is a fragment without a period"
+
     def test_returns_empty_string_when_no_paragraph(self):
         assert _extract_excerpt("<h1>Only a heading.</h1>") == ""
 

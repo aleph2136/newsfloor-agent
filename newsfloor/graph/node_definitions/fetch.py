@@ -259,6 +259,9 @@ def _parse_feed(source_url: str) -> tuple[list[ArticleRaw], str]:
                 summary       = summary,
             ))
 
+        # Sort newest-first so _PER_SOURCE_LIMIT always takes the most recent articles.
+        # ISO 8601 strings sort correctly lexicographically; undated articles sort last.
+        articles.sort(key=lambda a: a.published_at if a.published_at else "", reverse=True)
         return articles, ""
 
     except Exception as e:

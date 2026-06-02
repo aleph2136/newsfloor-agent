@@ -6,18 +6,21 @@
 
 import json
 import pytest
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
 
 from contracts.primitives import ArticleRaw, ArticleScored, NodeName, RetryReasonCode, RetryInstruction
 from contracts.nodes import ScoringTaskInput, ScoringTaskResult
 from node_definitions.scoring import (
     _combine_scores,
+    _compute_recency_score,
     _parse_relevance_output,
     _apply_retry_adjustments,
     run,
     DEFAULT_REPUTATION,
     RELEVANCE_WEIGHT,
     REPUTATION_WEIGHT,
+    RECENCY_WEIGHT,
 )
 
 
@@ -25,13 +28,15 @@ from node_definitions.scoring import (
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-def _article(article_id: str, source_domain: str = "example.com") -> ArticleRaw:
+def _article(article_id: str, source_domain: str = "example.com", days_old: int = 1) -> ArticleRaw:
+    """Returns an ArticleRaw published `days_old` days ago (default: yesterday → recency=1.0)."""
+    published = (datetime.now(timezone.utc) - timedelta(days=days_old)).replace(microsecond=0).isoformat()
     return ArticleRaw(
         article_id=article_id,
         url=f"https://{source_domain}/{article_id}",
         title=f"Title for {article_id}",
         source_domain=source_domain,
-        published_at="2026-01-01T00:00:00",
+        published_at=published,
         summary=f"Summary for {article_id}.",
     )
 
@@ -50,35 +55,87 @@ def _scoring_input(articles=None, reputation_map=None, threshold=0.5, instructio
 
 
 # ---------------------------------------------------------------------------
+# _compute_recency_score — age-bucket mapping
+# ---------------------------------------------------------------------------
+
+class TestComputeRecencyScore:
+
+    def _published(self, days_ago: int) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days_ago)).replace(microsecond=0).isoformat()
+
+    def test_article_published_today_scores_1_0(self):
+        assert _compute_recency_score(self._published(0)) == pytest.approx(1.0)
+
+    def test_article_published_3_days_ago_scores_1_0(self):
+        assert _compute_recency_score(self._published(3)) == pytest.approx(1.0)
+
+    def test_article_published_7_days_ago_scores_1_0(self):
+        assert _compute_recency_score(self._published(7)) == pytest.approx(1.0)
+
+    def test_article_published_14_days_ago_scores_0_75(self):
+        assert _compute_recency_score(self._published(14)) == pytest.approx(0.75)
+
+    def test_article_published_30_days_ago_scores_0_75(self):
+        assert _compute_recency_score(self._published(30)) == pytest.approx(0.75)
+
+    def test_article_published_60_days_ago_scores_0_5(self):
+        assert _compute_recency_score(self._published(60)) == pytest.approx(0.5)
+
+    def test_article_published_90_days_ago_scores_0_5(self):
+        assert _compute_recency_score(self._published(90)) == pytest.approx(0.5)
+
+    def test_article_published_120_days_ago_scores_0_25(self):
+        assert _compute_recency_score(self._published(120)) == pytest.approx(0.25)
+
+    def test_article_published_200_days_ago_scores_0_1(self):
+        assert _compute_recency_score(self._published(200)) == pytest.approx(0.1)
+
+    def test_empty_published_at_returns_neutral(self):
+        assert _compute_recency_score("") == pytest.approx(0.5)
+
+    def test_invalid_date_returns_neutral(self):
+        assert _compute_recency_score("not-a-date") == pytest.approx(0.5)
+
+    def test_naive_datetime_string_treated_as_utc(self):
+        # Published 3 days ago without timezone info — should still score as recent
+        naive = (datetime.now(timezone.utc) - timedelta(days=3)).replace(tzinfo=None, microsecond=0).isoformat()
+        assert _compute_recency_score(naive) == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
 # _combine_scores — arithmetic
+# All test articles use days_old=1 (yesterday) → recency_score = 1.0 deterministically.
 # ---------------------------------------------------------------------------
 
 class TestCombineScores:
 
     def test_high_relevance_unknown_source(self):
-        # Docstring example: relevance 0.9, rep 0.5 (unknown) → 0.760
+        # rel=0.9, rep=0.5 (unknown), recency=1.0
+        # (0.9×0.55) + (0.5×0.25) + (1.0×0.20) = 0.495 + 0.125 + 0.200 = 0.820
         a = _article("a1", "newsite.io")
         scores = {"a1": {"relevance_score": 0.9, "relevance_rationale": "Strong match."}}
         result = _combine_scores([a], scores, reputation_map={}, score_threshold=0.5)
-        # (0.9 × 0.65) + (0.5 × 0.35) = 0.585 + 0.175 = 0.760
-        assert result[0].combined_score == pytest.approx(0.760, abs=1e-4)
+        assert result[0].combined_score == pytest.approx(0.820, abs=1e-4)
 
     def test_low_relevance_high_reputation(self):
-        # Docstring example: relevance 0.3, rep 0.9 → 0.510 (marginal pass)
+        # rel=0.3, rep=0.9, recency=1.0
+        # (0.3×0.55) + (0.9×0.25) + (1.0×0.20) = 0.165 + 0.225 + 0.200 = 0.590 → pass
         a = _article("a2", "trusted.com")
         scores = {"a2": {"relevance_score": 0.3, "relevance_rationale": "Tangential."}}
         result = _combine_scores([a], scores, reputation_map={"trusted.com": 0.9}, score_threshold=0.5)
-        # (0.3 × 0.65) + (0.9 × 0.35) = 0.195 + 0.315 = 0.510
-        assert result[0].combined_score == pytest.approx(0.510, abs=1e-4)
+        assert result[0].combined_score == pytest.approx(0.590, abs=1e-4)
         assert result[0].passed_threshold is True
 
-    def test_all_zeros_produce_zero_combined(self):
+    def test_zero_relevance_and_reputation_fresh_article(self):
+        # rel=0.0, rep=0.0, recency=1.0 → recency carries 0.200 → still fails at 0.5
         a = _article("a3", "x.com")
         scores = {"a3": {"relevance_score": 0.0, "relevance_rationale": "Irrelevant."}}
         result = _combine_scores([a], scores, reputation_map={"x.com": 0.0}, score_threshold=0.5)
-        assert result[0].combined_score == pytest.approx(0.0)
+        assert result[0].combined_score == pytest.approx(0.200, abs=1e-4)
+        assert result[0].passed_threshold is False
 
     def test_all_ones_produce_one_combined(self):
+        # (1.0×0.55) + (1.0×0.25) + (1.0×0.20) = 1.0
         a = _article("a4", "x.com")
         scores = {"a4": {"relevance_score": 1.0, "relevance_rationale": "Perfect."}}
         result = _combine_scores([a], scores, reputation_map={"x.com": 1.0}, score_threshold=0.5)
@@ -88,7 +145,11 @@ class TestCombineScores:
         # Article not returned by LLM falls back to DEFAULT_REPUTATION for relevance
         a = _article("a5", "x.com")
         result = _combine_scores([a], relevance_scores={}, reputation_map={}, score_threshold=0.5)
-        expected = (DEFAULT_REPUTATION * RELEVANCE_WEIGHT) + (DEFAULT_REPUTATION * REPUTATION_WEIGHT)
+        expected = (
+            (DEFAULT_REPUTATION * RELEVANCE_WEIGHT)
+            + (DEFAULT_REPUTATION * REPUTATION_WEIGHT)
+            + (1.0 * RECENCY_WEIGHT)
+        )
         assert result[0].combined_score == pytest.approx(expected, abs=1e-4)
         assert result[0].relevance_score == DEFAULT_REPUTATION
 
@@ -99,18 +160,20 @@ class TestCombineScores:
         assert result[0].reputation_score == DEFAULT_REPUTATION
 
     def test_passes_at_exactly_threshold(self):
-        # combined_score == threshold → passes (>=)
+        # rel=0.5, rep=0.1, recency=1.0
+        # (0.5×0.55) + (0.1×0.25) + (1.0×0.20) = 0.275 + 0.025 + 0.200 = 0.500 exactly
         a = _article("a7", "x.com")
-        # (0.5 × 0.65) + (0.5 × 0.35) = 0.5 exactly at default weights
         scores = {"a7": {"relevance_score": 0.5, "relevance_rationale": "Moderate."}}
-        result = _combine_scores([a], scores, reputation_map={"x.com": 0.5}, score_threshold=0.5)
+        result = _combine_scores([a], scores, reputation_map={"x.com": 0.1}, score_threshold=0.5)
+        assert result[0].combined_score == pytest.approx(0.500, abs=1e-4)
         assert result[0].passed_threshold is True
 
     def test_fails_just_below_threshold(self):
+        # rel=0.1, rep=0.3, recency=1.0
+        # (0.1×0.55) + (0.3×0.25) + (1.0×0.20) = 0.055 + 0.075 + 0.200 = 0.330 < 0.5
         a = _article("a8", "x.com")
-        scores = {"a8": {"relevance_score": 0.4, "relevance_rationale": "Low."}}
-        # (0.4 × 0.65) + (0.5 × 0.35) = 0.26 + 0.175 = 0.435 < 0.5
-        result = _combine_scores([a], scores, reputation_map={"x.com": 0.5}, score_threshold=0.5)
+        scores = {"a8": {"relevance_score": 0.1, "relevance_rationale": "Low."}}
+        result = _combine_scores([a], scores, reputation_map={"x.com": 0.3}, score_threshold=0.5)
         assert result[0].passed_threshold is False
 
     def test_combined_score_rounded_to_4_decimals(self):
@@ -123,12 +186,14 @@ class TestCombineScores:
         result = _combine_scores([], {}, {}, score_threshold=0.5)
         assert result == []
 
-    def test_score_rationale_contains_both_numeric_scores(self):
+    def test_score_rationale_contains_all_component_scores(self):
+        # rel=0.8, rep=0.7, recency=1.0 (fresh article)
         a = _article("a10", "x.com")
         scores = {"a10": {"relevance_score": 0.8, "relevance_rationale": "Very good."}}
         result = _combine_scores([a], scores, reputation_map={"x.com": 0.7}, score_threshold=0.5)
         assert "0.80" in result[0].score_rationale
         assert "0.70" in result[0].score_rationale
+        assert "1.00" in result[0].score_rationale  # recency score
 
     def test_multiple_articles_scored_independently(self):
         articles = [_article("m1", "a.com"), _article("m2", "b.com")]
@@ -156,7 +221,7 @@ class TestCombineScores:
     def test_no_articles_pass_with_high_threshold(self):
         articles = [_article("f1", "a.com")]
         scores = {"f1": {"relevance_score": 0.1, "relevance_rationale": "Irrelevant."}}
-        # (0.1 × 0.65) + (0.1 × 0.35) = 0.1 < 0.8
+        # (0.1×0.55) + (0.1×0.25) + (1.0×0.20) = 0.055 + 0.025 + 0.200 = 0.280 < 0.8
         result = _combine_scores(articles, scores, reputation_map={"a.com": 0.1}, score_threshold=0.8)
         assert all(not a.passed_threshold for a in result)
 
@@ -169,6 +234,28 @@ class TestCombineScores:
         }
         result = _combine_scores(articles, scores, {}, score_threshold=0.5)
         assert [a.article_id for a in result] == ["first", "second", "third"]
+
+    def test_old_article_scores_lower_than_fresh_equivalent(self):
+        fresh = _article("fresh", "x.com", days_old=1)
+        old   = _article("old",   "x.com", days_old=200)
+        scores = {
+            "fresh": {"relevance_score": 0.7, "relevance_rationale": "Good."},
+            "old":   {"relevance_score": 0.7, "relevance_rationale": "Good."},
+        }
+        result = _combine_scores(
+            [fresh, old], scores,
+            reputation_map={"x.com": 0.5},
+            score_threshold=0.5,
+        )
+        fresh_scored = next(a for a in result if a.article_id == "fresh")
+        old_scored   = next(a for a in result if a.article_id == "old")
+        assert fresh_scored.combined_score > old_scored.combined_score
+
+    def test_recency_score_stored_on_article(self):
+        a = _article("r1", "x.com", days_old=1)
+        scores = {"r1": {"relevance_score": 0.7, "relevance_rationale": "Good."}}
+        result = _combine_scores([a], scores, reputation_map={}, score_threshold=0.5)
+        assert result[0].recency_score == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -360,8 +447,8 @@ class TestScoringRun:
         task_input = _scoring_input(two_articles, reputation_map={"a.com": 0.8, "b.com": 0.3})
         with patch("node_definitions.scoring._score_relevance", return_value=mixed_scores):
             result = run(task_input)
-        # r1: (0.9×0.65) + (0.8×0.35) = 0.865 → pass
-        # r2: (0.1×0.65) + (0.3×0.35) = 0.170 → fail
+        # r1 (fresh): (0.9×0.55)+(0.8×0.25)+(1.0×0.20) = 0.895 → pass
+        # r2 (fresh): (0.1×0.55)+(0.3×0.25)+(1.0×0.20) = 0.330 → fail
         assert result.high_quality_count == 1
         assert result.low_quality_count == 1
 
@@ -417,7 +504,7 @@ class TestScoringRun:
             assert article.relevance_score == DEFAULT_REPUTATION
 
     def test_run_applies_retry_threshold_before_scoring(self):
-        # borderline article: combined ≈ 0.4675 fails at 0.5 but passes after BELOW_SCORE_THRESHOLD drops to 0.4
+        # threshold dropped to 0.4; (0.45×0.55)+(0.5×0.25)+(1.0×0.20)=0.5725 > 0.4 → passes
         article = _article("edge", "a.com")
         instruction = RetryInstruction(
             node=NodeName.SCORING,
@@ -433,5 +520,12 @@ class TestScoringRun:
         mock_scores = {"edge": {"relevance_score": 0.45, "relevance_rationale": "Borderline."}}
         with patch("node_definitions.scoring._score_relevance", return_value=mock_scores):
             result = run(task_input)
-        # threshold dropped to 0.4; (0.45×0.65)+(0.5×0.35)=0.4675 > 0.4 → passes
         assert result.high_quality_count == 1
+
+    def test_scored_articles_have_recency_score_field(self, two_articles, mixed_scores):
+        task_input = _scoring_input(two_articles, reputation_map={"a.com": 0.8, "b.com": 0.3})
+        with patch("node_definitions.scoring._score_relevance", return_value=mixed_scores):
+            result = run(task_input)
+        for article in result.scored_articles:
+            assert hasattr(article, "recency_score")
+            assert 0.0 <= article.recency_score <= 1.0
