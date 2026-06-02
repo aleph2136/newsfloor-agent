@@ -24,7 +24,6 @@ from contracts.nodes import (
     DeliveryTaskResult,
     EngineerProfile,
     FetchTaskResult,
-    OrchestratorContext,
     PublishTaskInput,
     PublishTaskResult,
     ScoringTaskResult,
@@ -497,6 +496,60 @@ class TestEngineerProfile:
     def test_focus_areas_can_be_empty_list(self):
         profile = EngineerProfile(**_engineer_profile(focus_areas=[]))
         assert profile.focus_areas == []
+
+
+# ---------------------------------------------------------------------------
+# FetchTaskResult
+# ---------------------------------------------------------------------------
+
+class TestFetchTaskResult:
+
+    def test_valid_construction(self):
+        FetchTaskResult(
+            run_id="r",
+            articles=[ArticleRaw(**_article_raw())],
+            fetch_errors=[],
+            article_count=1,
+        )
+
+    def test_articles_can_be_empty_list(self):
+        result = FetchTaskResult(run_id="r", articles=[], fetch_errors=[], article_count=0)
+        assert result.articles == []
+
+    def test_fetch_errors_defaults_to_empty_list(self):
+        result = FetchTaskResult(run_id="r", articles=[], article_count=0)
+        assert result.fetch_errors == []
+
+    def test_fetch_errors_accepts_non_empty_list(self):
+        result = FetchTaskResult(
+            run_id="r",
+            articles=[],
+            fetch_errors=["https://example.com/rss: timeout", "https://other.com/rss: 404"],
+            article_count=0,
+        )
+        assert len(result.fetch_errors) == 2
+
+    def test_missing_run_id_raises(self):
+        with pytest.raises(ValidationError):
+            FetchTaskResult(articles=[], fetch_errors=[], article_count=0)
+
+    def test_missing_articles_raises(self):
+        with pytest.raises(ValidationError):
+            FetchTaskResult(run_id="r", fetch_errors=[], article_count=0)
+
+    def test_missing_article_count_raises(self):
+        with pytest.raises(ValidationError):
+            FetchTaskResult(run_id="r", articles=[], fetch_errors=[])
+
+    def test_article_count_zero_is_valid(self):
+        result = FetchTaskResult(run_id="r", articles=[], fetch_errors=[], article_count=0)
+        assert result.article_count == 0
+
+    def test_articles_contains_article_raw_instances(self):
+        article = ArticleRaw(**_article_raw())
+        result = FetchTaskResult(run_id="r", articles=[article], fetch_errors=[], article_count=1)
+        assert result.articles[0].article_id == "abc123"
+        assert result.articles[0].title == "Some Title"
 
 
 # ---------------------------------------------------------------------------
