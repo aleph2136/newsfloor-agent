@@ -38,6 +38,7 @@ from __future__ import annotations
 import logging
 import re
 
+from bs4 import BeautifulSoup
 from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
 
@@ -209,11 +210,15 @@ def _evaluate_with_llm(
         allow_delegation=False,
     )
 
-    # Trim the digest for the prompt — we don't need the full HTML,
-    # just enough to evaluate quality. 3000 chars covers most digests.
-    digest_excerpt = supervisor_input.synthesis_result.digest_html[:3000]
-    if len(supervisor_input.synthesis_result.digest_html) > 3000:
-        digest_excerpt += "\n... [truncated for evaluation]"
+    digest_html    = supervisor_input.synthesis_result.digest_html
+    digest_excerpt = digest_html[:3000]
+    if len(digest_html) > 3000:
+        digest_excerpt += "\n... [truncated]"
+
+    # Criterion 5 (ACTIONABLE) requires reading the closing takeaway, which is nearly
+    # always past the 3000-char truncation point. Extract it separately so the
+    # evaluator can assess it without requiring a higher truncation limit.
+    closing_excerpt = _extract_closing_paragraph(digest_html)
 
     evaluate_task = Task(
         description=f"""
@@ -231,8 +236,11 @@ SIGNALS EXTRACTED:
   New signals:          {', '.join(supervisor_input.synthesis_result.new_signals) or 'None'}
   Trend confirmations:  {', '.join(supervisor_input.synthesis_result.trend_confirmations) or 'None'}
 
-DIGEST (excerpt):
+DIGEST BODY (excerpt — first 3000 chars):
 {digest_excerpt}
+
+CLOSING SECTION (extracted separately for criterion 5 evaluation):
+{closing_excerpt or "[closing section not found]"}
 
 EVALUATION CRITERIA — the digest must pass ALL of these:
 
@@ -334,6 +342,18 @@ def _parse_llm_decision(
     reason_str      = data.get("reason_code")
     failed_criteria = data.get("failed_criteria", [])
 
+    # Structured log so CloudWatch shows the LLM REWORK rate after structural gates pass.
+    # Review after 2-3 weeks: if LLM REWORK rate is below ~15%, tighten the structural
+    # gate thresholds in _check_structural_gates instead of relying on the LLM call.
+    logger.info({
+        "node":             "output_supervisor",
+        "structural_gates": "passed",
+        "llm_decision":     decision_str,
+        "reason_code":      reason_str,
+        "failed_criteria":  failed_criteria,
+        "rationale":        rationale,
+    })
+
     if route == SupervisorRoute.REWORK and reason_str:
         try:
             reason_code = RetryReasonCode(reason_str.lower())
@@ -359,6 +379,22 @@ def _parse_llm_decision(
         rework_count = rework_count,
         rationale    = rationale,
     )
+
+
+def _extract_closing_paragraph(digest_html: str) -> str:
+    """
+    Extracts the last substantive paragraph from the digest HTML.
+
+    Criterion 5 (ACTIONABLE closing takeaway) requires reading the end of the
+    digest, which is nearly always past the 3000-char truncation used in the
+    evaluator prompt. Surfacing the closing section separately lets the evaluator
+    assess it without raising the truncation limit for the full body.
+
+    Returns the last non-empty <p> text found, or an empty string if none.
+    """
+    soup = BeautifulSoup(digest_html, "html.parser")
+    paragraphs = [p.get_text(strip=True) for p in soup.find_all("p") if p.get_text(strip=True)]
+    return paragraphs[-1] if paragraphs else ""
 
 
 def _request_rework(

@@ -3,30 +3,30 @@ nodes/fetch.py
 
 Fetches raw articles from curated RSS feeds and web sources.
 
-Crew design
-───────────
-Two agents with distinct responsibilities:
+Implementation design
+─────────────────────
+RSS feeds are parsed directly via feedparser rather than through a CrewAI agent.
+This is faster, cheaper (no LLM tokens), and more reliable for structured feed
+data. feedparser handles the XML parsing; httpx controls the timeout so a slow
+feed cannot hang the Lambda indefinitely.
 
-  FeedHarvester     Fetches articles from RSS/Atom feeds and returns raw
-                    content. Pure I/O — no quality judgement here. Uses
-                    the RSSFeedTool and ScrapeWebsiteTool from crewai-tools.
+Articles from all sources are collected into per-source buckets and then
+interleaved round-robin before trimming to max_articles. This prevents any
+single high-volume feed from consuming the entire article budget.
 
-  ArticleValidator  Reviews the harvested articles and filters out anything
-                    that is clearly irrelevant, malformed, or duplicate.
-                    Produces the final deduplicated ArticleRaw list.
-
-Why validation is a separate agent
+Thin article enrichment via CrewAI
 ────────────────────────────────────
-The harvester's job is volume — get as many candidate articles as possible
-within the max limit. The validator's job is hygiene — remove noise before
-it reaches the scoring node. Keeping them separate means neither agent
-is trying to optimize for two conflicting goals at once.
+Articles whose RSS summary is under 200 characters get a scrape pass via a
+lightweight CrewAI Article Enricher agent. The agent uses ScrapeWebsiteTool
+to pull richer article content. Enrichment is best-effort — the original
+article list is returned unchanged if parsing or scraping fails.
 
 Sources
 ───────
 Curated list of high-quality RSS feeds focused on AI engineering,
-agentic systems, and adjacent infrastructure topics. Passed in via
-FetchTaskInput so the graph controls the source list, not this file.
+agentic systems, and adjacent infrastructure topics. Loaded from
+newsfloor/config_data/sources.json — edit that file to add, remove, or
+swap feed URLs without changing Python code.
 
 Rework behavior
 ───────────────
@@ -336,10 +336,31 @@ Use these article IDs:
         kickoff_crew(crew, "fetch", task_input.run_id, [settings.bedrock_model_fetch])
         raw_output = enrich_task.output.raw
 
-        import json
+        import json, re as _re
+        # Strip markdown fences before parsing — LLMs frequently wrap JSON output.
+        cleaned = _re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output.strip(), flags=_re.IGNORECASE)
+
         enriched_map: dict[str, str] = {}
-        enrichments = json.loads(raw_output)
+        try:
+            enrichments = json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            logger.warning({
+                "node":                 "fetch",
+                "enrichment_parse_error": str(e),
+                "raw":                  raw_output[:500],
+            })
+            return all_articles
+
         for item in enrichments:
+            # Validate required fields — a malformed item should not silently
+            # insert an empty summary or corrupt an existing one.
+            if "article_id" not in item or "summary" not in item:
+                logger.warning({
+                    "node":    "fetch",
+                    "warning": "Enrichment item missing article_id or summary — skipping",
+                    "item":    str(item)[:200],
+                })
+                continue
             enriched_map[item["article_id"]] = _strip_html(item["summary"])
 
         # Replace summaries in the full article list

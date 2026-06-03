@@ -2,7 +2,7 @@
 primitives.py
 
 Shared building blocks used across node contracts.
-These are teh smallest units of structured data in the system.
+These are the smallest units of structured data in the system.
 No node-specific logic lives here.
 """
 
@@ -11,11 +11,23 @@ from enum import Enum
 from pydantic import BaseModel, Field, HttpUrl
 
 class RunStatus(str, Enum):
-    """Tracks the overall health of a daily run."""
-    IN_PROGRESS = "in_progress"
-    COMPLETED   = "complete"
-    DEGRADED    = "degraded" # one or more gates failed
-    FAILED      = "failed" # could not recover
+    """
+    Tracks the overall health of a daily run.
+
+    COMPLETED               — clean run: digest delivered, no errors
+    COMPLETED_WITH_WARNINGS — digest delivered successfully, but non-critical
+                              bookkeeping steps (trend writes, reputation updates)
+                              had errors. The user got a good digest.
+    DEGRADED                — delivery failed; the user received nothing.
+                              Gate failures and rework loops that forced a
+                              degraded-mode proceed are also recorded here.
+    FAILED                  — could not recover; pipeline crashed before delivery
+    """
+    IN_PROGRESS              = "in_progress"
+    COMPLETED                = "completed"
+    COMPLETED_WITH_WARNINGS  = "completed_with_warnings"
+    DEGRADED                 = "degraded"
+    FAILED                   = "failed"
 
 class NodeName(str, Enum):
     """

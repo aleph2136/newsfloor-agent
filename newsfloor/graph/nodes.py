@@ -71,12 +71,13 @@ def topic_node(state: DigestGraphState) -> dict:
     context = state["context"]
 
     task_input = TopicTaskInput(
-        run_id              = state["run_id"],
-        recent_topics       = context.recent_topics if context else [],
-        active_trend_names  = [t.name for t in context.active_trends] if context else [],
-        recent_signals      = context.recent_weekly_signals if context else [],
-        available_topics    = AVAILABLE_TOPICS,
-        retry_instruction   = retry,
+        run_id                   = state["run_id"],
+        recent_topics            = context.recent_topics if context else [],
+        active_trend_names       = [t.name for t in context.active_trends] if context else [],
+        recent_signals           = context.recent_weekly_signals if context else [],
+        available_topics         = AVAILABLE_TOPICS,
+        recent_weekly_narrative  = context.recent_weekly_narrative if context else "",
+        retry_instruction        = retry,
     )
 
     result = topic_run(task_input)
@@ -182,12 +183,14 @@ def input_supervisor(state: DigestGraphState) -> dict:
         "rework_count": rework_count,
     })
  
+    context = state.get("context")
     supervisor_input = InputSupervisorInput(
-        run_id         = state["run_id"],
-        topic_result   = state["topic_result"],
-        fetch_result   = state["fetch_result"],
-        scoring_result = state["scoring_result"],
-        rework_count   = rework_count,
+        run_id                   = state["run_id"],
+        topic_result             = state["topic_result"],
+        fetch_result             = state["fetch_result"],
+        scoring_result           = state["scoring_result"],
+        recent_weekly_narrative  = context.recent_weekly_narrative if context else "",
+        rework_count             = rework_count,
     )
  
     from node_definitions.input_supervisor import run as input_supervisor_run
@@ -223,14 +226,15 @@ def synthesis_node(state: DigestGraphState) -> dict:
     from config_loader import load_profile
 
     task_input = SynthesisTaskInput(
-        run_id             = state["run_id"],
-        topic              = topic_result.topic,
-        focus_angle        = topic_result.focus_angle,
-        passed_articles    = scoring_result.passed_articles,
-        active_trends      = context.active_trends if context else [],
-        recent_run_signals = context.recent_run_signals if context else [],
-        engineer_profile   = context.engineer_profile if context else load_profile(),
-        retry_instruction  = retry,
+        run_id                   = state["run_id"],
+        topic                    = topic_result.topic,
+        focus_angle              = topic_result.focus_angle,
+        passed_articles          = scoring_result.passed_articles,
+        active_trends            = context.active_trends if context else [],
+        recent_run_signals       = context.recent_run_signals if context else [],
+        recent_weekly_narrative  = context.recent_weekly_narrative if context else "",
+        engineer_profile         = context.engineer_profile if context else load_profile(),
+        retry_instruction        = retry,
     )
  
     result = synthesis_run(task_input)

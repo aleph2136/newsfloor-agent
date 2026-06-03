@@ -50,22 +50,30 @@ class OrchestratorContext(BaseModel):
     Assembled by load_context, then passed through GraphState as read-only context.
     No node writes to this — it represents the world as it was before this run.
     """
-    active_trends:          list[TrendSnapshot]  = Field(
+    active_trends:           list[TrendSnapshot]  = Field(
         description="Trend records with strength > 0.3, ordered by strength desc."
     )
-    source_reputation_map:  dict[str, float]     = Field(
+    source_reputation_map:   dict[str, float]     = Field(
         description="Current reputation score for every known domain."
     )
-    recent_topics:          list[str]            = Field(
+    recent_topics:           list[str]            = Field(
         description="Topics covered in the last 30 days, most recent first."
     )
-    recent_run_signals:     list[str]            = Field(
+    recent_run_signals:      list[str]            = Field(
         description="Raw trend signals from the last 7 run records."
     )
-    recent_weekly_signals:  list[str]            = Field(
+    recent_weekly_signals:   list[str]            = Field(
         description="Recurring signals from the last 2 weekly synthesis records."
     )
-    engineer_profile:       EngineerProfile
+    recent_weekly_narrative: str                  = Field(
+        default="",
+        description=(
+            "LLM-generated narrative from the most recent WeeklySynthesis record. "
+            "Injected into topic, input_supervisor, and synthesis prompts to give "
+            "each node longitudinal context about last week's momentum."
+        )
+    )
+    engineer_profile:        EngineerProfile
  
  
 # ---------------------------------------------------------------------------
@@ -122,12 +130,16 @@ class GraphState(BaseModel):
  
 class TopicTaskInput(BaseModel):
     """Everything the Topic node needs to make an informed selection."""
-    run_id:             str
-    recent_topics:      list[str]        = Field(description="Topics covered in the last 30 days.")
-    active_trend_names: list[str]        = Field(description="Names of trends with strength > 0.3.")
-    recent_signals:     list[str]        = Field(description="Raw signals from the last two weekly syntheses.")
-    available_topics:   list[str]        = Field(description="Full rotation list the node may select from.")
-    retry_instruction:  RetryInstruction | None = Field(
+    run_id:                  str
+    recent_topics:           list[str]        = Field(description="Topics covered in the last 30 days.")
+    active_trend_names:      list[str]        = Field(description="Names of trends with strength > 0.3.")
+    recent_signals:          list[str]        = Field(description="Raw signals from the last two weekly syntheses.")
+    available_topics:        list[str]        = Field(description="Full rotation list the node may select from.")
+    recent_weekly_narrative: str              = Field(
+        default="",
+        description="LLM narrative from last Monday's WeeklySynthesis. Injected into the strategist prompt."
+    )
+    retry_instruction:       RetryInstruction | None = Field(
         default=None,
         description="Populated on rework. Node pattern-matches on reason_code to adjust behavior."
     )
@@ -206,12 +218,16 @@ class InputSupervisorInput(BaseModel):
     The full picture of the input stage, passed to the input supervisor.
     Supervisor evaluates these together — not each in isolation.
     """
-    run_id:         str
-    topic_result:   TopicTaskResult
-    fetch_result:   FetchTaskResult
-    scoring_result: ScoringTaskResult
-    rework_count:   int = Field(default=0, description="How many times this supervisor has reworked this run.")
-    max_reworks:    int = Field(default=2)
+    run_id:                  str
+    topic_result:            TopicTaskResult
+    fetch_result:            FetchTaskResult
+    scoring_result:          ScoringTaskResult
+    recent_weekly_narrative: str = Field(
+        default="",
+        description="LLM narrative from last Monday's WeeklySynthesis. Injected into the LLM evaluator prompt."
+    )
+    rework_count:            int = Field(default=0, description="How many times this supervisor has reworked this run.")
+    max_reworks:             int = Field(default=2)
  
  
 # SupervisorDecision is the output — defined in primitives.py
@@ -224,18 +240,22 @@ class InputSupervisorInput(BaseModel):
  
 class SynthesisTaskInput(BaseModel):
     """Scored articles plus historical context for writing the digest."""
-    run_id:             str
-    topic:              str
-    focus_angle:        str
-    passed_articles:    list[ArticleScored]
-    active_trends:      list[TrendSnapshot]  = Field(
+    run_id:                  str
+    topic:                   str
+    focus_angle:             str
+    passed_articles:         list[ArticleScored]
+    active_trends:           list[TrendSnapshot]  = Field(
         description="Full trend snapshots for contextual reasoning."
     )
-    recent_run_signals: list[str]            = Field(
+    recent_run_signals:      list[str]            = Field(
         description="Raw signals from the last 7 run records."
     )
-    engineer_profile:   EngineerProfile
-    retry_instruction:  RetryInstruction | None = Field(default=None)
+    recent_weekly_narrative: str                  = Field(
+        default="",
+        description="LLM narrative from last Monday's WeeklySynthesis. Injected into contextualizer and writer prompts."
+    )
+    engineer_profile:        EngineerProfile
+    retry_instruction:       RetryInstruction | None = Field(default=None)
  
  
 class SynthesisTaskResult(BaseModel):

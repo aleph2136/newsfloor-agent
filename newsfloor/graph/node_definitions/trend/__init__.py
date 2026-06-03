@@ -165,11 +165,15 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
     # -------------------------------------------------------------------------
     # 5. RunRecord — always last
     # -------------------------------------------------------------------------
-    run_status = (
-        RunStatus.DEGRADED
-        if (all_errors or not task_input.delivery_sent)
-        else RunStatus.COMPLETED
-    )
+    # Delivery failure (user got nothing) is DEGRADED regardless of other errors.
+    # Bookkeeping errors on a successfully delivered digest are COMPLETED_WITH_WARNINGS
+    # — the user got a good digest, only trend/reputation writes had issues.
+    if not task_input.delivery_sent:
+        run_status = RunStatus.DEGRADED
+    elif all_errors:
+        run_status = RunStatus.COMPLETED_WITH_WARNINGS
+    else:
+        run_status = RunStatus.COMPLETED
  
     run_status, errors = write_run_record(
         db         = db,

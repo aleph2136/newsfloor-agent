@@ -39,12 +39,13 @@ def mock_engineer_profile():
 @pytest.fixture
 def mock_context(mock_engineer_profile):
     context = MagicMock(spec=OrchestratorContext)
-    context.recent_topics = []
-    context.active_trends = []
-    context.recent_weekly_signals = []
-    context.source_reputation_map = {}
-    context.recent_run_signals = []
-    context.engineer_profile = mock_engineer_profile
+    context.recent_topics           = []
+    context.active_trends           = []
+    context.recent_weekly_signals   = []
+    context.source_reputation_map   = {}
+    context.recent_run_signals      = []
+    context.recent_weekly_narrative = ""
+    context.engineer_profile        = mock_engineer_profile
     return context
 
 @pytest.fixture

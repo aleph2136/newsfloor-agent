@@ -79,7 +79,7 @@ class WeeklySynthesis(BaseModel):
     """
     Written by the Trend node on the first run of each Monday.
     Distills the past 7 run records into pattern signals.
- 
+
     DynamoDB table: digest-weekly-synthesis
     PK: week_id
     TTL attribute: ttl
@@ -101,6 +101,15 @@ class WeeklySynthesis(BaseModel):
     source_reputation_deltas: dict[str, float] = Field(
         default_factory=dict,
         description="Change in reputation score this week keyed by domain. e.g. {'simonwillison.net': +0.05}"
+    )
+    narrative:            str       = Field(
+        default="",
+        description=(
+            "LLM-generated 3-5 sentence pattern narrative for the week. "
+            "Read by topic_node, input_supervisor, and synthesis_node in subsequent runs "
+            "to provide longitudinal context — which topics are saturated, which are "
+            "emerging, and what the field was preoccupied with last week."
+        )
     )
     run_ids_included:     list[str] = Field(default_factory=list, description="The run_ids that fed this synthesis.")
     created_at:           str       = Field(default_factory=lambda: datetime.utcnow().isoformat())

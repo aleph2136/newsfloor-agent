@@ -299,13 +299,20 @@ def _fallback_trend(
 
 
 def _parse_json_list(raw: str) -> list:
-    """Parses a JSON array from raw LLM output. Returns empty list on failure."""
+    """
+    Parses a JSON array from raw LLM output. Returns empty list on failure.
+
+    Fences are stripped first because LLMs frequently wrap JSON in markdown code
+    blocks. Stripping before the first json.loads attempt avoids the regex fallback
+    matching partial content when the only issue is a leading/trailing fence.
+    """
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
     try:
-        result = json.loads(raw)
+        result = json.loads(cleaned)
         if isinstance(result, list):
             return result
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", raw, re.DOTALL)
+        match = re.search(r"\[.*\]", cleaned, re.DOTALL)
         if match:
             try:
                 result = json.loads(match.group())

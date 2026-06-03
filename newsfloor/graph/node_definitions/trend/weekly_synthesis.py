@@ -7,9 +7,12 @@ Called only on Mondays. Reads the last 7 RunRecords, computes signal
 patterns deterministically, then uses an LLM agent to produce a
 human-readable narrative describing what the week's pattern means.
 
-The narrative is currently logged rather than stored — the WeeklySynthesis
-schema can be extended with a narrative field when you want to surface
-it in the digest itself.
+The narrative is stored in the WeeklySynthesis DynamoDB record and read
+back by load_context at the start of subsequent runs. Downstream nodes
+(topic_node, input_supervisor, synthesis_node) receive it as
+recent_weekly_narrative and inject it into their prompts for longitudinal
+context — which topics are saturated, which are emerging, and what the
+field was preoccupied with last week.
 """
 
 from __future__ import annotations
@@ -64,7 +67,6 @@ def write_weekly_synthesis(
     emerging        = list(current_signals - prior_signals)[:20]
     fading          = list(prior_signals - current_signals)[:20]
 
-    # LLM narrative
     narrative = _generate_narrative(
         llm       = llm,
         topics    = topics,
@@ -73,15 +75,14 @@ def write_weekly_synthesis(
         fading    = fading,
     )
 
-    # Log the narrative — extend WeeklySynthesis with a narrative field
-    # when you want to store and surface it in future digests
+    # Structured counts log — the narrative itself is queryable from DynamoDB
     logger.info({
-        "action":           "weekly_narrative",
-        "week_id":          current_week_id(),
-        "narrative":        narrative,
-        "recurring_count":  len(recurring),
-        "emerging_count":   len(emerging),
-        "fading_count":     len(fading),
+        "action":          "weekly_synthesis_written",
+        "week_id":         current_week_id(),
+        "recurring_count": len(recurring),
+        "emerging_count":  len(emerging),
+        "fading_count":    len(fading),
+        "has_narrative":   bool(narrative),
     })
 
     synthesis = WeeklySynthesis(
@@ -91,6 +92,7 @@ def write_weekly_synthesis(
         emerging_concepts        = emerging,
         fading_concepts          = fading,
         source_reputation_deltas = {},
+        narrative                = narrative,
         run_ids_included         = run_ids,
         created_at               = now,
         ttl                      = ttl_days(90),

@@ -97,6 +97,10 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
         f"- {s}" for s in task_input.recent_run_signals[:15]
     ) or "No recent signals yet."
 
+    weekly_narrative_context = (
+        task_input.recent_weekly_narrative or "No weekly narrative yet — early run."
+    )
+
     profile = task_input.engineer_profile
 
     # -------------------------------------------------------------------------
@@ -193,6 +197,9 @@ ACTIVE TRENDS (name — strength — key signals):
 RECENT SIGNALS FROM PAST RUNS:
 {recent_signals_context}
 
+LAST WEEK'S PATTERN (use this to judge whether today's content accelerates, extends, or breaks from recent momentum):
+{weekly_narrative_context}
+
 TODAY'S ARTICLES:
 {article_context}
 
@@ -234,8 +241,14 @@ ENGINEER PROFILE:
 TODAY'S ARTICLES (use all of these):
 {article_context}
 
-TREND CONTEXT BRIEF (from contextualizer — use this to frame the digest):
-(This will be provided by the previous task output)
+TREND CONTEXT BRIEF (from Trend Contextualizer — injected from previous task):
+Use the contextualizer's confirmed trends and pattern signal paragraph to:
+- Frame the intro paragraph (what is the broader movement this topic sits inside?)
+- Inform the Trend Signals section (which trends does today's content reinforce?)
+- Connect articles to each other where the contextualizer identified shared themes
+
+LAST WEEK'S PATTERN (longitudinal context for the intro and Trend Signals section):
+{weekly_narrative_context}
 
 HTML STRUCTURE REQUIREMENTS:
   - Subject line as <h1>: make it specific and compelling, not generic
@@ -286,7 +299,14 @@ TODAY'S TOPIC: {task_input.topic}
 ACTIVE TREND NAMES (for confirmation matching):
 {chr(10).join(f"- {t.name}" for t in task_input.active_trends) or "None yet"}
 
-Review the digest written in the previous task and extract:
+Extract trend signals from two sources:
+1. The digest written in the previous task (what the writer emphasized)
+2. The original articles listed below (what the content actually contained)
+
+Signals present in the articles but absent from the digest are still valid
+signals — the writer's editorial choices should not suppress trend tracking.
+
+From both sources, extract:
 
 1. NEW SIGNALS: Specific, observable patterns or practices from today's content
    that are NOT already in the active trends list. Each signal must describe
@@ -308,6 +328,9 @@ Review the digest written in the previous task and extract:
 
 2. TREND CONFIRMATIONS: Names of active trends (from the list above) that
    today's content directly reinforces. Use the exact trend names.
+
+ORIGINAL ARTICLES (use alongside the digest to catch signals the writer may have omitted):
+{article_context}
 
 Return a JSON object with exactly these fields:
 {{
@@ -418,11 +441,16 @@ def _parse_signals_output(raw_output: str) -> dict:
     """
     Parses the signal extractor's JSON output.
     Returns safe defaults on parse failure so the run never crashes here.
+
+    Fences are stripped first for the same reason as _parse_relevance_output in
+    scoring.py — LLMs frequently wrap JSON in markdown blocks, and stripping before
+    the first json.loads attempt avoids partial matches from the regex fallback.
     """
     import json, re
 
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output.strip(), flags=re.IGNORECASE)
     try:
-        match = re.search(r"\{.*\}", raw_output, re.DOTALL)
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         data  = json.loads(match.group()) if match else {}
         return {
             "new_signals":         data.get("new_signals", []),
@@ -442,6 +470,10 @@ def _apply_retry_adjustments(task_input: SynthesisTaskInput) -> str:
     """
     Returns an additional instruction string for the writer task on rework.
     Empty string on first pass — only adds instructions when retrying.
+
+    On DIGEST_INSUFFICIENT rework, reads failed_criteria from the retry params
+    and appends criterion-specific guidance so the writer knows exactly what the
+    output supervisor rejected — not just that it was rejected for "insufficient depth".
     """
     instruction = task_input.retry_instruction
     if instruction is None:
@@ -451,12 +483,39 @@ def _apply_retry_adjustments(task_input: SynthesisTaskInput) -> str:
     params = instruction.parameter_adjustment
 
     if reason == RetryReasonCode.DIGEST_INSUFFICIENT:
-        return (
+        base = (
             "The previous digest was rejected for insufficient depth. "
             "Each article section must be at least 4 sentences. "
             "The 'Why this matters' sentence must connect explicitly to "
             "agentic architecture or engineering governance."
         )
+
+        # Append criterion-specific guidance for each failed criterion the
+        # output supervisor returned — this is more actionable than a generic
+        # "improve depth" instruction.
+        failed = params.get("failed_criteria", [])
+        criterion_notes: list[str] = []
+
+        if "PERSONALIZED" in failed:
+            criterion_notes.append(
+                "The previous digest was not sufficiently personalized — "
+                "every section must connect directly to agentic architecture, "
+                "governance, or observability as they apply to the reader's work."
+            )
+        if "ACTIONABLE" in failed:
+            criterion_notes.append(
+                "The previous closing takeaway was too generic — "
+                "name a specific pattern, tradeoff, or decision the reader can act on."
+            )
+        if "CONNECTED" in failed:
+            criterion_notes.append(
+                "The previous digest treated articles in isolation — "
+                "explicitly connect at least two articles to each other or to an active trend."
+            )
+
+        if criterion_notes:
+            return base + " Additionally: " + " ".join(criterion_notes)
+        return base
 
     if reason == RetryReasonCode.MISSING_REQUIRED_FIELD:
         missing = params.get("missing_fields", [])

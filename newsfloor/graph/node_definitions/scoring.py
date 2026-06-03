@@ -73,6 +73,12 @@ RELEVANCE_WEIGHT   = settings.scoring_relevance_weight
 REPUTATION_WEIGHT  = settings.scoring_reputation_weight
 RECENCY_WEIGHT     = settings.scoring_recency_weight
 
+# Maximum articles sent to the LLM in a single relevance scoring call.
+# At 20+ articles, a single prompt risks context pressure, article conflation,
+# and a single malformed JSON entry corrupting the entire response. Batching
+# keeps each call focused and degrades partially rather than all-or-nothing.
+SCORING_BATCH_SIZE = 10
+
 
 def run(task_input: ScoringTaskInput) -> ScoringTaskResult:
     """
@@ -127,10 +133,39 @@ def run(task_input: ScoringTaskInput) -> ScoringTaskResult:
 
 def _score_relevance(task_input: ScoringTaskInput) -> dict[str, dict]:
     """
-    Runs the RelevanceAnalyst crew and returns a dict keyed by article_id.
-    Each value is {"relevance_score": float, "relevance_rationale": str}.
-    Returns an empty dict on failure — _combine_scores handles missing entries
-    by applying the default reputation score.
+    Scores articles for relevance via the RelevanceAnalyst crew.
+
+    Articles are chunked at SCORING_BATCH_SIZE before being sent to the LLM.
+    This keeps each prompt focused and prevents a single malformed JSON entry
+    in a large response from corrupting scores for every article in the run.
+    Results from all batches are merged before returning.
+
+    Returns a dict keyed by article_id:
+      {"relevance_score": float, "relevance_rationale": str}
+    Returns an empty dict on total failure — _combine_scores handles missing
+    entries by applying the DEFAULT_REPUTATION fallback score.
+    """
+    articles = task_input.articles
+    merged: dict[str, dict] = {}
+
+    for i in range(0, len(articles), SCORING_BATCH_SIZE):
+        batch = articles[i : i + SCORING_BATCH_SIZE]
+        batch_num = (i // SCORING_BATCH_SIZE) + 1
+        logger.info({
+            "node":       "scoring",
+            "batch":      batch_num,
+            "batch_size": len(batch),
+        })
+        batch_result = _score_batch(batch, task_input)
+        merged.update(batch_result)
+
+    return merged
+
+
+def _score_batch(batch: list, task_input: ScoringTaskInput) -> dict[str, dict]:
+    """
+    Runs the RelevanceAnalyst crew on a single batch of articles.
+    Returns a partial relevance_scores dict for the articles in this batch.
     """
     llm = LLM(model=settings.bedrock_model_scoring)
 
@@ -154,7 +189,7 @@ def _score_relevance(task_input: ScoringTaskInput) -> dict[str, dict]:
     article_list = "\n".join(
         f"ID: {a.article_id}\nTitle: {a.title}\nSource: {a.source_domain}\n"
         f"Summary: {a.summary}\n"
-        for a in task_input.articles
+        for a in batch
     )
 
     relevance_task = Task(
@@ -209,7 +244,7 @@ Return a JSON array where each item has exactly these fields:
         kickoff_crew(crew, "scoring", task_input.run_id, [settings.bedrock_model_scoring])
         return _parse_relevance_output(relevance_task.output.raw)
     except Exception as e:
-        logger.warning({"node": "scoring", "warning": f"Relevance scoring failed: {e}"})
+        logger.warning({"node": "scoring", "warning": f"Relevance batch scoring failed: {e}"})
         return {}
 
 
@@ -217,11 +252,17 @@ def _parse_relevance_output(raw_output: str) -> dict[str, dict]:
     """
     Parses the RelevanceAnalyst's JSON output into a dict keyed by article_id.
     Returns an empty dict on parse failure — callers apply fallback scores.
+
+    Fences are stripped first because LLMs frequently wrap JSON output in
+    markdown code blocks. Stripping before the first json.loads attempt means
+    a fenced-only response is handled cleanly without falling through to the
+    regex fallback, which can match partial content.
     """
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output.strip(), flags=re.IGNORECASE)
     try:
-        items = json.loads(raw_output)
+        items = json.loads(cleaned)
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", raw_output, re.DOTALL)
+        match = re.search(r"\[.*\]", cleaned, re.DOTALL)
         if not match:
             return {}
         try:

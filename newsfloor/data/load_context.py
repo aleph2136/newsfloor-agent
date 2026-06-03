@@ -63,22 +63,28 @@ def run() -> OrchestratorContext:
     for run in recent_runs[:7]:
         recent_run_signals.extend(run.new_signals)
 
-    # --- Recent weekly signals (last 2 weekly synthesis records) ---
+    # --- Recent weekly signals and narrative (last 2 weekly synthesis records) ---
     weekly_records = db.get_recent_weekly_syntheses(count=2)
     recent_weekly_signals = []
     for week in weekly_records:
         recent_weekly_signals.extend(week.recurring_signals)
         recent_weekly_signals.extend(week.emerging_concepts)
 
+    # Narrative from the most recent weekly record only — it's a single coherent
+    # paragraph written for a specific week and is not meaningfully combinable.
+    # Falls back to empty string if no weekly record exists yet (early runs).
+    recent_weekly_narrative = weekly_records[0].narrative if weekly_records else ""
+
     logger.info("load_context: context assembled successfully")
 
     return OrchestratorContext(
-        active_trends           = active_trends,
-        source_reputation_map   = source_reputation_map,
-        recent_topics           = recent_topics,
-        recent_run_signals      = recent_run_signals,
-        recent_weekly_signals   = recent_weekly_signals,
-        engineer_profile        = load_profile(),
+        active_trends            = active_trends,
+        source_reputation_map    = source_reputation_map,
+        recent_topics            = recent_topics,
+        recent_run_signals       = recent_run_signals,
+        recent_weekly_signals    = recent_weekly_signals,
+        recent_weekly_narrative  = recent_weekly_narrative,
+        engineer_profile         = load_profile(),
     )
 
 def _to_snapshot(record) -> TrendSnapshot:

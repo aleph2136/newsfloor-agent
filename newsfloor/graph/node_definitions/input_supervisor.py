@@ -21,8 +21,19 @@ Rework behavior
 When rework is requested, the supervisor writes a RetryInstruction
 targeting topic_node. Routing back to topic means all three input nodes
 rerun — a fresh topic selection naturally leads to a fresh fetch and
-fresh scoring. The retry instruction carries the specific reason so
+fresh scoring. The retry instruction carries a specific reason code so
 topic_node can adjust its selection strategy accordingly.
+
+Reason codes this supervisor emits and how topic_node handles them:
+
+  WEAK_TOPIC_SELECTION  → topic_node excludes the previous topic
+  INSUFFICIENT_ARTICLES → topic_node excludes the previous topic (same as above)
+  LOW_QUALITY_ARTICLES  → topic_node excludes the previous topic; articles
+                          passed threshold but lacked substance — try a new topic
+  SOURCE_FETCH_FAILURE  → topic_node unchanged; fetch_node retries with
+                          a subset of most reliable sources
+  LOW_CONFIDENCE        → topic_node clears recent_topics so all topics
+                          are fair game on the retry pass
 
 Max reworks
 ───────────
@@ -225,6 +236,9 @@ SCORING RESULTS:
 PASSED ARTICLES (score — title — source — summary excerpt):
 {passed_summaries or "None"}
 
+LAST WEEK'S PATTERN:
+{supervisor_input.recent_weekly_narrative or "No weekly narrative yet."}
+
 EVALUATION CRITERIA:
 1. Is the topic timely and well-chosen given current agentic engineering trends?
 2. Do the passed articles provide enough substance and diversity to support
@@ -314,6 +328,15 @@ def _parse_llm_decision(
     route        = SupervisorRoute.REWORK if decision_str == "REWORK" else SupervisorRoute.PROCEED
     rationale    = data.get("rationale", "")
     reason_str   = data.get("reason_code")
+
+    # Structured log so CloudWatch shows the LLM REWORK rate after structural gates pass.
+    logger.info({
+        "node":             "input_supervisor",
+        "structural_gates": "passed",
+        "llm_decision":     decision_str,
+        "reason_code":      reason_str,
+        "rationale":        rationale,
+    })
 
     if route == SupervisorRoute.REWORK and reason_str:
         try:

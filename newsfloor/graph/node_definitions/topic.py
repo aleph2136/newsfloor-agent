@@ -1,41 +1,52 @@
 """
 nodes/topic.py
- 
+
 Selects today's topic and focus angle using a two-agent CrewAI crew.
- 
+
 Crew design
 ───────────
 Two agents with distinct responsibilities:
- 
+
   TopicStrategist   Decides which topic to cover today given recent history,
                     active trends, and the available rotation list. Produces
                     a candidate selection with rationale and confidence.
- 
+
   FocusRefiner      Takes the strategist's selection and sharpens the focus
                     angle — ensuring it's specific to agentic architecture and
                     engineering rather than generic. Produces the final output.
- 
+
 Why two agents instead of one
 ──────────────────────────────
 A single agent asked to both select and refine tends to anchor on its first
 choice and rationalize it. Separating selection from refinement means the
 refiner can push back on a vague focus angle without being invested in the
 topic choice itself. In practice this produces sharper, more actionable angles.
- 
+
 Rework behavior
 ───────────────
 If the input supervisor routes back here with a RetryInstruction, the node
-reads the reason_code and adjusts:
-  WEAK_TOPIC_SELECTION   → exclude the previous topic, lower confidence threshold
-  LOW_CONFIDENCE         → broaden the available topic list, allow recent repeats
+reads the reason_code and adjusts via TopicPromptContext:
+
+  WEAK_TOPIC_SELECTION   → exclude the previous topic from the available list
+  LOW_CONFIDENCE         → clear recent_topics so previously-covered topics
+                           are not excluded; gives the strategist more options
+                           when confidence was low on the first pass
+  LOW_QUALITY_ARTICLES   → treated like WEAK_TOPIC_SELECTION; the articles
+                           scored poorly against this topic, so try a different one
+
+All prompt values are read exclusively from a TopicPromptContext object
+returned by _apply_retry_adjustments. run() never reads from task_input
+directly when building task description strings — this guarantees that retry
+adjustments (e.g. clearing recent_topics on LOW_CONFIDENCE) actually take effect.
 """
- 
+
 from __future__ import annotations
 import logging
- 
+from dataclasses import dataclass
+
 from crewai import Agent, Crew, Process, Task
 from crewai.llm import LLM
- 
+
 from config import settings
 from config_loader import load_topics
 from contracts.nodes import (
@@ -50,12 +61,29 @@ logger = logging.getLogger(__name__)
 # Topic rotation list — loaded from newsfloor/config_data/topics.json.
 # Edit that file to add, remove, or reorder topics without changing Python code.
 AVAILABLE_TOPICS = load_topics()
- 
- 
+
+
+@dataclass
+class TopicPromptContext:
+    """
+    All values injected into topic selection prompt strings.
+
+    Assembled by _apply_retry_adjustments. run() reads exclusively from this
+    object when building task descriptions so retry adjustments cannot be
+    accidentally bypassed by reading task_input fields directly.
+    """
+    available_topics:   list[str]
+    recent_topics:      list[str]
+    exclusions:         list[str]
+    active_trend_names: list[str]
+    recent_signals:     list[str]
+    recent_weekly_narrative: str
+
+
 def run(task_input: TopicTaskInput) -> TopicTaskResult:
     """
     Runs the topic selection crew and returns a TopicTaskResult.
- 
+
     Adjusts behavior if a retry_instruction is present in the input.
     """
     logger.info({
@@ -64,9 +92,9 @@ def run(task_input: TopicTaskInput) -> TopicTaskResult:
         "active_trends":    task_input.active_trend_names[:5],
         "has_retry":        task_input.retry_instruction is not None,
     })
- 
-    available_topics, exclusions = _apply_retry_adjustments(task_input)
- 
+
+    ctx = _apply_retry_adjustments(task_input)
+
     llm = LLM(model=settings.bedrock_model_topic)
 
     # -------------------------------------------------------------------------
@@ -119,21 +147,24 @@ def run(task_input: TopicTaskInput) -> TopicTaskResult:
     select_task = Task(
         description=f"""
 Select the single best topic for today's AI agentic engineering digest.
- 
+
 AVAILABLE TOPICS (select exactly one):
-{chr(10).join(f"- {t}" for t in available_topics)}
- 
+{chr(10).join(f"- {t}" for t in ctx.available_topics)}
+
 TOPICS COVERED RECENTLY (avoid these):
-{chr(10).join(f"- {t}" for t in task_input.recent_topics) or "None yet"}
- 
+{chr(10).join(f"- {t}" for t in ctx.recent_topics) or "None yet"}
+
 ACTIVE TRENDS (favour topics that intersect with these):
-{chr(10).join(f"- {t}" for t in task_input.active_trend_names) or "None yet"}
- 
+{chr(10).join(f"- {t}" for t in ctx.active_trend_names) or "None yet"}
+
 RECENT SIGNALS (context for what is moving in the field):
-{chr(10).join(f"- {s}" for s in task_input.recent_signals[:10]) or "None yet"}
- 
-{f"EXCLUSIONS (do not select these): {', '.join(exclusions)}" if exclusions else ""}
- 
+{chr(10).join(f"- {s}" for s in ctx.recent_signals[:10]) or "None yet"}
+
+LAST WEEK'S PATTERN (use this to time your selection against recent momentum):
+{ctx.recent_weekly_narrative or "No weekly narrative yet — early run."}
+
+{f"EXCLUSIONS (do not select these): {', '.join(ctx.exclusions)}" if ctx.exclusions else ""}
+
 Select the topic that is most timely, most relevant to current trends,
 and has not been covered recently. Return only the topic name and a
 two to three sentence rationale explaining why this topic now.
@@ -230,38 +261,46 @@ Return a JSON object with exactly these fields:
 # Helpers
 # ---------------------------------------------------------------------------
  
-def _apply_retry_adjustments(
-    task_input: TopicTaskInput,
-) -> tuple[list[str], list[str]]:
+def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
     """
-    Reads the retry_instruction and returns an adjusted available topic list
-    and an exclusion list. Called only when a retry is in play.
- 
-    Returns:
-        available_topics  — the list the strategist may select from
-        exclusions        — topics to explicitly exclude this pass
+    Reads the retry_instruction and returns a fully resolved TopicPromptContext.
+
+    On first pass (no retry) all values come straight from task_input.
+    On retry, adjustments are applied based on reason_code:
+
+      WEAK_TOPIC_SELECTION  — previous topic removed from available list and
+                              added to exclusions so the strategist picks something new
+      LOW_CONFIDENCE        — recent_topics cleared so no recency penalty applies;
+                              the strategist can revisit any topic on the rotation list
+      LOW_QUALITY_ARTICLES  — same as WEAK_TOPIC_SELECTION; articles scored poorly
+                              against this topic, so a different topic is warranted
     """
-    available = list(task_input.available_topics or AVAILABLE_TOPICS)
+    available  = list(task_input.available_topics or AVAILABLE_TOPICS)
+    recent     = list(task_input.recent_topics)
     exclusions: list[str] = []
- 
+
     instruction = task_input.retry_instruction
-    if instruction is None:
-        return available, exclusions
- 
-    reason = instruction.reason_code
-    params = instruction.parameter_adjustment
- 
-    if reason == RetryReasonCode.WEAK_TOPIC_SELECTION:
-        # Exclude the previously chosen topic so the strategist picks differently
-        previous_topic = params.get("previous_topic", "")
-        if previous_topic:
-            available = [t for t in available if t != previous_topic]
-            exclusions.append(previous_topic)
- 
-    elif reason == RetryReasonCode.LOW_CONFIDENCE:
-        # Relax recency constraint — allow topics from further back
-        # by not passing recent_topics into the prompt exclusion list
-        # (handled in the task description by passing an empty list)
-        pass
- 
-    return available, exclusions
+    if instruction is not None:
+        reason = instruction.reason_code
+        params = instruction.parameter_adjustment
+
+        if reason in (RetryReasonCode.WEAK_TOPIC_SELECTION, RetryReasonCode.LOW_QUALITY_ARTICLES):
+            previous_topic = params.get("previous_topic", "")
+            if previous_topic:
+                available = [t for t in available if t != previous_topic]
+                exclusions.append(previous_topic)
+
+        elif reason == RetryReasonCode.LOW_CONFIDENCE:
+            # Clear the recency list so previously-covered topics are not excluded.
+            # The strategist had low confidence — broadening the candidate space
+            # is more useful than avoiding repeats on this pass.
+            recent = []
+
+    return TopicPromptContext(
+        available_topics        = available,
+        recent_topics           = recent,
+        exclusions              = exclusions,
+        active_trend_names      = list(task_input.active_trend_names),
+        recent_signals          = list(task_input.recent_signals),
+        recent_weekly_narrative = getattr(task_input, "recent_weekly_narrative", ""),
+    )

@@ -182,12 +182,13 @@ def synthesis_result(run_id):
 @pytest.fixture
 def mock_context(engineer_profile):
     ctx = MagicMock(spec=OrchestratorContext)
-    ctx.recent_topics          = ["Multi-agent orchestration"]
-    ctx.active_trends          = []
-    ctx.recent_weekly_signals  = ["supervisor patterns", "output contracts"]
-    ctx.source_reputation_map  = {"example.com": 0.75}
-    ctx.recent_run_signals     = ["governance", "reliability"]
-    ctx.engineer_profile       = engineer_profile
+    ctx.recent_topics            = ["Multi-agent orchestration"]
+    ctx.active_trends            = []
+    ctx.recent_weekly_signals    = ["supervisor patterns", "output contracts"]
+    ctx.source_reputation_map    = {"example.com": 0.75}
+    ctx.recent_run_signals       = ["governance", "reliability"]
+    ctx.recent_weekly_narrative  = ""
+    ctx.engineer_profile         = engineer_profile
     return ctx
 
 
