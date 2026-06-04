@@ -188,6 +188,8 @@ def mock_context(engineer_profile):
     ctx.source_reputation_map    = {"example.com": 0.75}
     ctx.recent_run_signals       = ["governance", "reliability"]
     ctx.recent_weekly_narrative  = ""
+    ctx.seen_article_ids         = ["abc123", "def456"]
+    ctx.source_last_contributed  = {"example.com": "2026-06-01"}
     ctx.engineer_profile         = engineer_profile
     return ctx
 
@@ -283,6 +285,40 @@ class TestFetchNodeWiring:
         assert arg.topic == topic_result.topic
         assert arg.focus_angle == topic_result.focus_angle
         assert arg.retry_instruction is None
+
+    @patch("node_definitions.fetch.run")
+    def test_passes_seen_article_ids_from_context(self, mock_run, run_id, topic_result, fetch_result, mock_context):
+        mock_run.return_value = fetch_result
+        state = {
+            "run_id": run_id,
+            "rework_counts": {},
+            "topic_result": topic_result,
+            "context": mock_context,
+            "active_retry_instruction": None,
+        }
+
+        fetch_node(state)
+
+        arg = mock_run.call_args[0][0]
+        assert arg.seen_article_ids == mock_context.seen_article_ids
+        assert arg.source_last_contributed == mock_context.source_last_contributed
+
+    @patch("node_definitions.fetch.run")
+    def test_defaults_to_empty_when_context_is_none(self, mock_run, run_id, topic_result, fetch_result):
+        mock_run.return_value = fetch_result
+        state = {
+            "run_id": run_id,
+            "rework_counts": {},
+            "topic_result": topic_result,
+            "active_retry_instruction": None,
+            # no "context" key
+        }
+
+        fetch_node(state)
+
+        arg = mock_run.call_args[0][0]
+        assert arg.seen_article_ids == []
+        assert arg.source_last_contributed == {}
 
     @patch("node_definitions.fetch.run")
     def test_returns_fetch_result_key(self, mock_run, run_id, topic_result, fetch_result):

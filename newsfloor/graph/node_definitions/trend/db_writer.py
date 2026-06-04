@@ -117,6 +117,14 @@ def write_source_updates(
         if article.relevance_score > best_per_domain.get(domain, 0.0):
             best_per_domain[domain] = article.relevance_score
 
+    # Track which domains had at least one article pass scoring — used for
+    # rotation weighting in the next run's fetch order.
+    contributed_domains: set[str] = {
+        a.source_domain for a in scored_articles if a.passed_threshold
+    }
+
+    today_date = now[:10]  # ISO date portion e.g. "2026-06-04"
+
     for domain, relevance_score in best_per_domain.items():
         try:
             source      = db.get_or_create_source(domain)
@@ -124,12 +132,16 @@ def write_source_updates(
             new_rep     = source.updated_reputation(relevance_score)
             delta       = round(new_rep - prior_score, 4)
 
-            updated_source = source.model_copy(update={
+            update_fields: dict = {
                 "reputation_score":    new_rep,
                 "total_articles_seen": source.total_articles_seen + 1,
                 "last_seen":           now,
                 "updated_at":          now,
-            })
+            }
+            if domain in contributed_domains:
+                update_fields["last_contributed_date"] = today_date
+
+            updated_source = source.model_copy(update=update_fields)
 
             db.put_source(updated_source)
             updated.append(domain)
@@ -161,15 +173,16 @@ def write_run_record(
     errors: list[str] = []
 
     try:
+        passed_articles = [a for a in task_input.scored_articles if a.passed_threshold]
+
         run_record = RunRecord(
             run_id              = task_input.run_id,
             status              = run_status,
             topic               = task_input.topic,
             focus_angle         = task_input.focus_angle,
             articles_fetched    = len(task_input.scored_articles),
-            articles_passed     = len([
-                a for a in task_input.scored_articles if a.passed_threshold
-            ]),
+            articles_passed     = len(passed_articles),
+            article_ids_used    = [a.article_id for a in passed_articles],
             new_signals         = task_input.new_signals,
             trend_confirmations = task_input.trend_confirmations,
             digest_summary      = task_input.digest_summary,

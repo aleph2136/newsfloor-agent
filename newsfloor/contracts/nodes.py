@@ -73,6 +73,14 @@ class OrchestratorContext(BaseModel):
             "each node longitudinal context about last week's momentum."
         )
     )
+    seen_article_ids:        list[str]            = Field(
+        default_factory=list,
+        description="article_id hashes seen in the last 14 days. Passed to fetch to prevent article recurrence."
+    )
+    source_last_contributed: dict[str, str]       = Field(
+        default_factory=dict,
+        description="ISO date when each domain last had an article pass scoring. Used for fetch-time rotation weighting."
+    )
     engineer_profile:        EngineerProfile
  
  
@@ -159,13 +167,15 @@ class TopicTaskResult(BaseModel):
  
 class FetchTaskInput(BaseModel):
     """What the Fetch node needs to retrieve articles."""
-    run_id:            str
-    topic:             str
-    focus_angle:       str
-    sources:           list[str] = Field(description="Curated list of RSS feed URLs or known article endpoints.")
-    min_articles:      int       = Field(default=3)
-    max_articles:      int       = Field(default=10)
-    retry_instruction: RetryInstruction | None = Field(default=None)
+    run_id:                  str
+    topic:                   str
+    focus_angle:             str
+    sources:                 list[str]        = Field(description="Curated list of RSS feed URLs or known article endpoints.")
+    min_articles:            int              = Field(default=3)
+    max_articles:            int              = Field(default=10)
+    seen_article_ids:        list[str]        = Field(default_factory=list, description="Article IDs seen in recent runs. Skipped during fetch.")
+    source_last_contributed: dict[str, str]   = Field(default_factory=dict, description="Domain → ISO date of last passing article. Used for rotation weighting.")
+    retry_instruction:       RetryInstruction | None = Field(default=None)
  
  
 class FetchTaskResult(BaseModel):

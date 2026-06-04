@@ -38,7 +38,8 @@ from __future__ import annotations
 import hashlib
 import html as html_stdlib
 import logging
-from datetime import datetime, timezone
+import random
+from datetime import datetime, date, timezone
 from itertools import zip_longest
 from urllib.parse import urlparse
 
@@ -62,6 +63,51 @@ logger = logging.getLogger(__name__)
 # Prevents a high-volume feed (e.g. simonwillison.net/atom/everything/) from
 # consuming the entire max_articles budget before other sources are fetched.
 _PER_SOURCE_LIMIT = 2
+
+# How many days before a source is treated as "fully available" again.
+# Sources that contributed more recently are drawn toward the end of the fetch
+# order, giving quieter sources a chance at the first-round slots.
+_SOURCE_COOLDOWN_DAYS = 7
+
+
+def _weighted_source_shuffle(
+    sources:              list[str],
+    source_last_contributed: dict[str, str],
+) -> list[str]:
+    """
+    Returns the source list in a randomized order biased toward sources that
+    haven't contributed recently. Sources not seen in the last _SOURCE_COOLDOWN_DAYS
+    get full weight (1.0); sources that contributed yesterday get minimum weight (0.3).
+
+    Uses a weighted draw-without-replacement so every source is still included —
+    this changes *order*, not membership.
+    """
+    today = date.today()
+
+    def _weight(url: str) -> float:
+        domain = urlparse(url).netloc or url
+        last_date_str = source_last_contributed.get(domain, "")
+        if not last_date_str:
+            return 1.0
+        try:
+            days_since = (today - date.fromisoformat(last_date_str[:10])).days
+            return min(1.0, 0.3 + (days_since / _SOURCE_COOLDOWN_DAYS) * 0.7)
+        except (ValueError, OverflowError):
+            return 1.0
+
+    remaining = [(url, _weight(url)) for url in sources]
+    shuffled: list[str] = []
+    while remaining:
+        total = sum(w for _, w in remaining)
+        r = random.uniform(0, total)
+        cumulative = 0.0
+        for i, (url, w) in enumerate(remaining):
+            cumulative += w
+            if r <= cumulative:
+                shuffled.append(url)
+                remaining.pop(i)
+                break
+    return shuffled
 
 
 class ScrapeWebsiteTool(BaseTool):
@@ -108,16 +154,23 @@ def run(task_input: FetchTaskInput) -> FetchTaskResult:
 
     sources, min_articles = _apply_retry_adjustments(task_input)
 
+    # Rotate source order so sources that haven't contributed recently get
+    # priority in the round-robin interleave, preventing the same handful of
+    # high-reputation sources from always occupying the first slots.
+    sources = _weighted_source_shuffle(sources, task_input.source_last_contributed)
+    logger.info({"node": "fetch", "source_order": [urlparse(s).netloc for s in sources]})
+
     # --- Direct RSS fetch (primary path) ---
     # We use feedparser directly rather than a CrewAI tool for RSS because
     # it is faster, cheaper (no LLM token cost), and more reliable for
     # structured feed data. The crew is used for scraping full article
     # content when the RSS summary is too short to score meaningfully.
     articles, fetch_errors = _fetch_feeds(
-        sources     = sources,
-        topic       = task_input.topic,
-        focus_angle = task_input.focus_angle,
-        max_articles= task_input.max_articles,
+        sources          = sources,
+        topic            = task_input.topic,
+        focus_angle      = task_input.focus_angle,
+        max_articles     = task_input.max_articles,
+        seen_article_ids = set(task_input.seen_article_ids),
     )
 
     # --- Enrich thin summaries via scraping crew ---
@@ -147,10 +200,11 @@ def run(task_input: FetchTaskInput) -> FetchTaskResult:
 # ---------------------------------------------------------------------------
 
 def _fetch_feeds(
-    sources:      list[str],
-    topic:        str,
-    focus_angle:  str,
-    max_articles: int,
+    sources:          list[str],
+    topic:            str,
+    focus_angle:      str,
+    max_articles:     int,
+    seen_article_ids: set[str] | None = None,
 ) -> tuple[list[ArticleRaw], list[str]]:
     """
     Parses each RSS/Atom feed and returns a flat deduplicated list of
@@ -159,9 +213,12 @@ def _fetch_feeds(
     Articles are collected from ALL sources (up to _PER_SOURCE_LIMIT each)
     and then interleaved round-robin so no single source dominates the final
     list when it is trimmed to max_articles.
+
+    seen_article_ids — article_ids seen in recent runs. Seeded here so the
+    same article cannot recur across consecutive daily runs.
     """
     fetch_errors: list[str]              = []
-    seen_ids:     set[str]               = set()
+    seen_ids:     set[str]               = set(seen_article_ids) if seen_article_ids else set()
     buckets:      list[list[ArticleRaw]] = []
 
     for source_url in sources:

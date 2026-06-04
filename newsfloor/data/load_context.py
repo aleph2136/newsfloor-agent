@@ -19,7 +19,8 @@ OrchestratorContext contains:
 """
 from __future__ import annotations
 import logging
- 
+from datetime import datetime, timedelta
+
 from config import settings
 from config_loader import load_profile
 from contracts.nodes import (
@@ -49,14 +50,23 @@ def run() -> OrchestratorContext:
     active_trends = [_to_snapshot(t) for t in trend_records]
     logger.info(f"load_context: {len(active_trends)} active trends loaded")
 
-    # --- Source reputation map ---
+    # --- Source reputation map and rotation tracking ---
     source_records = db.get_all_sources()
-    source_reputation_map = {s.domain: s.reputation_score for s in source_records}
+    source_reputation_map    = {s.domain: s.reputation_score for s in source_records}
+    source_last_contributed  = {s.domain: s.last_contributed_date for s in source_records if s.last_contributed_date}
     logger.info(f"load_context: {len(source_reputation_map)} source reputation scores loaded")
 
     # --- Recent topics (last 30 days) ---
     recent_runs = db.get_recent_runs(days=30)
     recent_topics = [r.topic for r in recent_runs if r.topic]
+
+    # --- Seen article IDs (last 14 days) for cross-run deduplication ---
+    cutoff = datetime.utcnow() - timedelta(days=14)
+    seen_article_ids: list[str] = []
+    for run in recent_runs:
+        if run.created_at and run.created_at >= cutoff.isoformat():
+            seen_article_ids.extend(run.article_ids_used)
+    logger.info(f"load_context: {len(seen_article_ids)} article IDs loaded for dedup window")
 
     # --- Recent run signals (last 7 runs) ---
     recent_run_signals = []
@@ -80,7 +90,9 @@ def run() -> OrchestratorContext:
     return OrchestratorContext(
         active_trends            = active_trends,
         source_reputation_map    = source_reputation_map,
+        source_last_contributed  = source_last_contributed,
         recent_topics            = recent_topics,
+        seen_article_ids         = seen_article_ids,
         recent_run_signals       = recent_run_signals,
         recent_weekly_signals    = recent_weekly_signals,
         recent_weekly_narrative  = recent_weekly_narrative,

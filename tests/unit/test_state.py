@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from contracts.primitives import TrendStrength
-from contracts.state import SourceRecord, TrendRecord, current_week_id, ttl_days
+from contracts.state import RunRecord, SourceRecord, TrendRecord, current_week_id, ttl_days
 from state import merge_rework_counts
 
 
@@ -198,3 +198,43 @@ def test_source_updated_reputation_does_not_mutate(base_source):
     original = base_source.reputation_score
     base_source.updated_reputation(1.0)
     assert base_source.reputation_score == original
+
+
+# ---------------------------------------------------------------------------
+# RunRecord — article_ids_used field
+# ---------------------------------------------------------------------------
+
+def test_run_record_article_ids_used_defaults_to_empty():
+    record = RunRecord(run_id="2026-06-04")
+    assert record.article_ids_used == []
+
+
+def test_run_record_article_ids_used_accepts_list():
+    record = RunRecord(run_id="2026-06-04", article_ids_used=["abc123", "def456"])
+    assert record.article_ids_used == ["abc123", "def456"]
+
+
+def test_run_record_article_ids_used_roundtrips_through_dict():
+    record = RunRecord(run_id="2026-06-04", article_ids_used=["aaa", "bbb"])
+    restored = RunRecord(**record.model_dump())
+    assert restored.article_ids_used == ["aaa", "bbb"]
+
+
+# ---------------------------------------------------------------------------
+# SourceRecord — last_contributed_date field
+# ---------------------------------------------------------------------------
+
+def test_source_last_contributed_date_defaults_to_empty(base_source):
+    assert base_source.last_contributed_date == ""
+
+
+def test_source_last_contributed_date_accepts_iso_date():
+    source = SourceRecord(domain="example.com", last_contributed_date="2026-06-04")
+    assert source.last_contributed_date == "2026-06-04"
+
+
+def test_source_last_contributed_date_roundtrips_through_model_copy():
+    source = SourceRecord(domain="example.com")
+    updated = source.model_copy(update={"last_contributed_date": "2026-06-04"})
+    assert updated.last_contributed_date == "2026-06-04"
+    assert source.last_contributed_date == ""  # original unchanged

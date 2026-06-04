@@ -103,14 +103,17 @@ def fetch_node(state: DigestGraphState) -> dict:
     from node_definitions.fetch import run as fetch_run, DEFAULT_SOURCES
     from contracts.nodes import FetchTaskInput
  
+    context = state.get("context")
     task_input = FetchTaskInput(
-        run_id             = state["run_id"],
-        topic              = topic_result.topic,
-        focus_angle        = topic_result.focus_angle,
-        sources            = DEFAULT_SOURCES,
-        min_articles       = settings.fetch_min_articles,
-        max_articles       = settings.fetch_max_articles,
-        retry_instruction  = retry,
+        run_id                   = state["run_id"],
+        topic                    = topic_result.topic,
+        focus_angle              = topic_result.focus_angle,
+        sources                  = DEFAULT_SOURCES,
+        min_articles             = settings.fetch_min_articles,
+        max_articles             = settings.fetch_max_articles,
+        seen_article_ids         = context.seen_article_ids if context else [],
+        source_last_contributed  = context.source_last_contributed if context else {},
+        retry_instruction        = retry,
     )
 
     result = fetch_run(task_input)

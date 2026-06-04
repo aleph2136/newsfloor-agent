@@ -63,6 +63,10 @@ class RunRecord(BaseModel):
     new_signals:         list[str]   = Field(default_factory=list)
     trend_confirmations: list[str]   = Field(default_factory=list)
     digest_summary:      str         = Field(default="")
+    article_ids_used:    list[str]   = Field(
+        default_factory=list,
+        description="article_id hashes of articles that passed scoring this run. Used for cross-run dedup."
+    )
     orchestrator_notes:  list[str]   = Field(
         default_factory=list,
         description="Gate failures and degraded-mode decisions logged here for observability."
@@ -188,6 +192,10 @@ class SourceRecord(BaseModel):
     total_articles_seen:       int     = Field(default=0)
     avg_relevance_of_articles: float   = Field(ge=0.0, le=1.0, default=0.5)
     last_seen:                 str     = Field(default="")
+    last_contributed_date:     str     = Field(
+        default="",
+        description="ISO date when this source last had an article pass scoring. Used for fetch-time rotation weighting."
+    )
     first_seen:                str     = Field(default_factory=lambda: datetime.utcnow().isoformat())
     created_at:                str     = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at:                str     = Field(default_factory=lambda: datetime.utcnow().isoformat())
