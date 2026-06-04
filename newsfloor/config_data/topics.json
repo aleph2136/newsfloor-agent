@@ -18,5 +18,15 @@
   "real-world agentic system case studies",
   "agent deployment patterns on cloud infrastructure",
   "ethical considerations in autonomous agent design",
-  "agentic systems for developer tooling and platforms"
+  "agentic systems for developer tooling and platforms",
+  "AI-assisted code review and refactoring patterns",
+  "context window management in long coding sessions",
+  "prompt engineering patterns for software development",
+  "multi-agent workflows for development tasks (planning, implementation, testing)",
+  "safe delegation boundaries for AI coding assistants",
+  "AI dev tool evaluation and comparison (Copilot, Claude Code, Codex, Cursor)",
+  "maintaining architectural judgment while using AI acceleration",
+  "AI-assisted test generation and coverage strategies",
+  "AI tools for documentation and knowledge capture",
+  "mentoring engineers on effective AI tool use"
 ]

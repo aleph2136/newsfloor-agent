@@ -1,15 +1,21 @@
 [
   "https://simonwillison.net/atom/everything/",
   "https://lilianweng.github.io/index.xml",
-  "https://www.deeplearning.ai/blog/feed/",
   "https://blog.langchain.dev/rss/",
-  "https://www.anthropic.com/news/rss.xml",
-  "https://openai.com/blog/rss.xml",
+  "https://openai.com/news/rss.xml",
   "https://huggingface.co/blog/feed.xml",
   "https://towardsdatascience.com/feed",
-  "https://www.llamaindex.ai/blog/feed.xml",
   "https://blog.crewai.com/rss/",
   "https://huyenchip.com/feed.xml",
-  "https://eugeneyan.com/feed.xml",
-  "https://vickiboykis.com/feed.xml"
+  "https://eugeneyan.com/atom.xml",
+  "https://vickiboykis.com/index.xml",
+  "https://martinfowler.com/feed.atom",
+  "https://cursor.com/blog/rss.xml",
+  "https://github.blog/feed/",
+  "https://research.google/blog/rss/",
+  "https://aws.amazon.com/blogs/machine-learning/feed/",
+  "https://magazine.sebastianraschka.com/feed",
+  "https://www.latent.space/feed",
+  "https://addyosmani.com/rss.xml",
+  "https://blog.pragmaticengineer.com/rss"
 ]
