@@ -279,6 +279,8 @@ WRITING STANDARDS:
   - Use only safe structural HTML tags (h1-h6, p, ul, ol, li, a, em, strong, code, pre,
     blockquote, br, hr, div, span). Never include <script>, <style>, <iframe>, <object>,
     <embed>, <form>, or inline event handlers (onclick, onerror, etc.) of any kind.
+  - Never reproduce verbatim language from source articles; all content must be
+    original synthesis derived from the ideas, not the expression
 
 Return the complete HTML as a string. Start with <html> and end with </html>.
         """,

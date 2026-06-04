@@ -262,6 +262,9 @@ EVALUATION CRITERIA — the digest must pass ALL of these:
 
 6. PROPERLY CITED: Are sources cited with URLs in the correct format of 'Source: [Title] — [Author] ([URL])'?
 
+7. ORIGINAL: Does the digest avoid reproducing verbatim or near-verbatim language
+   from source articles? Content should be synthesized, not transcribed.
+
 If the digest passes all criteria, return PROCEED.
 If it fails on one or more criteria, return REWORK.
 
