@@ -41,6 +41,27 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
+_UNICODE_TO_ASCII: dict[str, str] = {
+    "—": "--",   # em dash
+    "–": "-",    # en dash
+    "‘": "'",    # left single quote
+    "’": "'",    # right single quote
+    "“": '"',    # left double quote
+    "”": '"',    # right double quote
+    "…": "...",  # ellipsis
+    " ": " ",    # non-breaking space
+}
+_SANITIZE_TABLE = str.maketrans(_UNICODE_TO_ASCII)
+
+
+def _sanitize_ascii(text: str) -> str:
+    """Replace common Unicode punctuation then strip any remaining non-ASCII.
+
+    S3 metadata values must be pure ASCII; LLM output frequently contains
+    em dashes and smart quotes that would otherwise fail validation.
+    """
+    return text.translate(_SANITIZE_TABLE).encode("ascii", "ignore").decode("ascii")
+
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -88,7 +109,7 @@ def run(task_input: PublishTaskInput) -> PublishTaskResult:
             Body=article_html.encode("utf-8"),
             ContentType="text/html; charset=utf-8",
             CacheControl="max-age=300",
-            Metadata={"title": title[:255], "excerpt": excerpt[:511]},
+            Metadata={"title": _sanitize_ascii(title)[:255], "excerpt": _sanitize_ascii(excerpt)[:511]},
         )
         logger.info({"node": "publish", "run_id": task_input.run_id, "step": "article uploaded"})
 

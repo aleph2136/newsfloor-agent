@@ -14,8 +14,9 @@ Nothing here knows about CrewAI, LangGraph, or business logic.
 from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
- 
+
 import boto3
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
@@ -29,6 +30,18 @@ from contracts.state import (
 )
  
 logger = logging.getLogger(__name__)
+
+
+def _to_dynamo(obj: Any) -> Any:
+    """Recursively convert float → Decimal so boto3 DynamoDB resource accepts it."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _to_dynamo(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_dynamo(v) for v in obj]
+    return obj
+
 
 class DynamoDBService:
     """
@@ -82,7 +95,7 @@ class DynamoDBService:
         record = RunRecord(run_id=run_id, status=RunStatus.IN_PROGRESS)
         try:
             self._runs.put_item(
-                Item=record.model_dump(),
+                Item=_to_dynamo(record.model_dump()),
                 ConditionExpression="attribute_not_exists(run_id)",
             )
             return True
@@ -100,7 +113,7 @@ class DynamoDBService:
     def put_run_record(self, record: RunRecord) -> None:
         """writes or overwrites a run record."""
         try:
-            self._runs.put_item(Item=record.model_dump())
+            self._runs.put_item(Item=_to_dynamo(record.model_dump()))
         except ClientError as e:
             logger.error({"method": "put_run_record", "run_id": record.run_id, "error": str(e)})
             raise
@@ -123,7 +136,7 @@ class DynamoDBService:
     
     def put_weekly_synthesis(self, record: WeeklySynthesis) -> None:
         try:
-            self._weekly.put_item(Item=record.model_dump())
+            self._weekly.put_item(Item=_to_dynamo(record.model_dump()))
         except ClientError as e:
             logger.error({"method": "put_weekly_synthesis", "week_id": record.week_id, "error": str(e)})
             raise
@@ -138,7 +151,7 @@ class DynamoDBService:
         """
         try:
             response = self._trends.scan(
-                FilterExpression=Attr("archived").eq(False) & Attr("strength").gte(min_strength)
+                FilterExpression=Attr("archived").eq(False) & Attr("strength").gte(Decimal(str(min_strength)))
             )
             return [TrendRecord(**item) for item in response.get("Items", [])]
         except ClientError as e:
@@ -159,7 +172,7 @@ class DynamoDBService:
 
     def put_trend(self, record: TrendRecord) -> None:
         try:
-            self._trends.put_item(Item=record.model_dump())
+            self._trends.put_item(Item=_to_dynamo(record.model_dump()))
         except ClientError as e:
             logger.error({"method": "put_trend", "trend_id": record.trend_id, "error": str(e)})
             raise
@@ -177,7 +190,7 @@ class DynamoDBService:
     
     def put_source(self, record: SourceRecord) -> None:
         try:
-            self._sources.put_item(Item=record.model_dump())
+            self._sources.put_item(Item=_to_dynamo(record.model_dump()))
         except ClientError as e:
             logger.error({"method": "put_source", "domain": record.domain, "error": str(e)})
             raise
