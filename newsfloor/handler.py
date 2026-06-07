@@ -75,6 +75,18 @@ def lambda_handler(event: dict, context) -> dict:
     # EventBridge retries Lambda async invocations up to 2 times on timeout/failure,
     # which means a throttle-induced timeout can produce 3 separate runs and 3 emails.
     # A conditional DynamoDB write ensures only one invocation proceeds per day.
+    #
+    # Manual invocations can bypass this guard by passing {"force": true} in the
+    # event payload. EventBridge always sends an empty payload, so it is never affected.
+    force = bool(event.get("force", False))
+    if force:
+        logger.info(json.dumps({"run_id": run_id, "message": "Force flag set — clearing prior run record"}))
+        try:
+            from data.db import DynamoDBService as _DB
+            _DB().delete_run_record(run_id)
+        except Exception as e:
+            logger.warning(json.dumps({"run_id": run_id, "warning": f"Could not delete prior run record: {e}"}))
+
     try:
         from data.db import DynamoDBService
         if not DynamoDBService().try_claim_run(run_id):

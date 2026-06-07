@@ -456,6 +456,18 @@ aws lambda invoke --function-name digest-agent-prod --region us-east-1 response.
 cat response.json
 ```
 
+If today's run has already completed and you want to force a re-run (e.g., for testing after a code change), pass a `force` flag in the payload. This clears the existing run record so the duplicate guard lets the new invocation through — EventBridge is not affected since it always sends an empty payload.
+
+```powershell
+aws lambda invoke `
+  --function-name digest-agent-prod `
+  --region us-east-1 `
+  --payload '{"force": true}' `
+  --cli-binary-format raw-in-base64-out `
+  response.json
+cat response.json
+```
+
 To watch the logs in real time:
 ```powershell
 aws logs tail /aws/lambda/digest-agent-prod --follow --region us-east-1

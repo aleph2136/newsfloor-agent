@@ -110,6 +110,10 @@ class DynamoDBService:
             logger.error({"method": "try_claim_run", "run_id": run_id, "error": str(e)})
             return True  # allow run on unexpected error rather than silently blocking
 
+    def delete_run_record(self, run_id: str) -> None:
+        """Deletes a run record to allow a forced re-run on the same day."""
+        self._runs.delete_item(Key={"run_id": run_id})
+
     def put_run_record(self, record: RunRecord) -> None:
         """writes or overwrites a run record."""
         try:
