@@ -8,7 +8,7 @@ License-File: LICENSE
 Requires-Dist: beautifulsoup4>=4.12
 Requires-Dist: boto3~=1.42.79
 Requires-Dist: botocore~=1.42.79
-Requires-Dist: crewai[bedrock]==1.14.4
+Requires-Dist: crewai[bedrock,google-genai]==1.14.4
 Requires-Dist: feedparser==6.0.11
 Requires-Dist: httpx~=0.28.1
 Requires-Dist: langgraph<0.3.0,>=0.2.0

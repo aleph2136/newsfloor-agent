@@ -26,8 +26,12 @@ newsfloor/graph/node_definitions/input_supervisor.py
 newsfloor/graph/node_definitions/output_supervisor.py
 newsfloor/graph/node_definitions/publish.py
 newsfloor/graph/node_definitions/scoring.py
-newsfloor/graph/node_definitions/synthesis.py
 newsfloor/graph/node_definitions/topic.py
+newsfloor/graph/node_definitions/synthesis/__init__.py
+newsfloor/graph/node_definitions/synthesis/crew.py
+newsfloor/graph/node_definitions/synthesis/html.py
+newsfloor/graph/node_definitions/synthesis/parsers.py
+newsfloor/graph/node_definitions/synthesis/retry.py
 newsfloor/graph/node_definitions/trend/__init__.py
 newsfloor/graph/node_definitions/trend/db_writer.py
 newsfloor/graph/node_definitions/trend/signal_analysis.py
