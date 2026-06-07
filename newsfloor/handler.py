@@ -80,12 +80,23 @@ def lambda_handler(event: dict, context) -> dict:
     # event payload. EventBridge always sends an empty payload, so it is never affected.
     force = bool(event.get("force", False))
     if force:
-        logger.info(json.dumps({"run_id": run_id, "message": "Force flag set — clearing prior run record"}))
         try:
             from data.db import DynamoDBService as _DB
+            from contracts.primitives import RunStatus
+            existing = _DB().get_run_record(run_id)
+            if existing and existing.status == RunStatus.IN_PROGRESS:
+                logger.warning(json.dumps({
+                    "run_id":  run_id,
+                    "message": "Force flag set but run is already IN_PROGRESS — blocking to prevent concurrent re-run",
+                }))
+                return {
+                    "statusCode": 409,
+                    "body": json.dumps({"run_id": run_id, "status": "blocked — run already in progress"}),
+                }
+            logger.info(json.dumps({"run_id": run_id, "message": "Force flag set — clearing prior run record"}))
             _DB().delete_run_record(run_id)
         except Exception as e:
-            logger.warning(json.dumps({"run_id": run_id, "warning": f"Could not delete prior run record: {e}"}))
+            logger.warning(json.dumps({"run_id": run_id, "warning": f"Force pre-check failed — proceeding anyway: {e}"}))
 
     try:
         from data.db import DynamoDBService

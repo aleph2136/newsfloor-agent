@@ -537,10 +537,12 @@ class TestRenderContentBlocksHtml:
         result = _render_content_blocks_html(ds)
         assert "<strong>State drift accumulates</strong>" in result
 
-    def test_includes_overall_trend_context(self):
+    def test_omits_overall_trend_context_prefix(self):
+        # overall_trend_context was removed from the content blocks HTML to prevent
+        # visual duplication with the article header's summary_hook excerpt.
         ds = _minimal_digest_json()
         result = _render_content_blocks_html(ds)
-        assert "Moving toward structured outputs." in result
+        assert "Moving toward structured outputs." not in result
 
     def test_includes_mermaid_diagram(self):
         ds = _minimal_digest_json()

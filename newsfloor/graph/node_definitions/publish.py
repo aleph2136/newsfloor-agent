@@ -293,20 +293,52 @@ def _render_article(
     return result
 
 
+_SOURCE_RE = re.compile(
+    r"(?:^|\n)\s*Source:\s*\[([^\]]+)\][^(]*\(\s*(https?://[^\s)]+)\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _extract_sources(text: str) -> tuple[list[tuple[str, str]], str]:
+    """
+    Pulls Source: [Title] (URL) citations out of tier_3_deep_dive text.
+    Returns (sources, cleaned_text) where sources is a list of (title, url) pairs
+    and cleaned_text has the source lines removed.
+    """
+    sources: list[tuple[str, str]] = []
+    for m in _SOURCE_RE.finditer(text):
+        sources.append((m.group(1).strip(), m.group(2).strip()))
+    cleaned = _SOURCE_RE.sub("", text).strip()
+    return sources, cleaned
+
+
+def _render_sources_html(sources: list[tuple[str, str]]) -> str:
+    if not sources:
+        return ""
+    links = " ".join(
+        f'<a href="{html_lib.escape(url)}" target="_blank" rel="noopener noreferrer" '
+        f'class="text-[#2dd4bf] hover:text-[#5eead4] underline underline-offset-2 transition-colors">'
+        f"{html_lib.escape(title)}</a>"
+        for title, url in sources
+    )
+    return (
+        f'<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 mt-2 mb-4 text-xs text-[#8b949e]">'
+        f'<span class="font-mono uppercase tracking-wider text-[10px] shrink-0">Sources:</span>'
+        f"{links}"
+        f"</div>"
+    )
+
+
 def _render_content_blocks_html(digest_json: DigestStructured) -> str:
     """
     Generates progressive-disclosure HTML from the structured digest JSON.
     Uses the existing site's dark aesthetic (#0d1117, #2dd4bf teal, Inter/DM Serif fonts)
     with native <details>/<summary> elements for zero-JS toggleable disclosure.
+
+    Sources are parsed from tier_3_deep_dive and rendered below the section heading
+    so they are immediately visible without expanding the deep-dive panel.
     """
     parts: list[str] = []
-
-    if digest_json.metadata.overall_trend_context:
-        ctx = html_lib.escape(digest_json.metadata.overall_trend_context)
-        parts.append(
-            f'<p class="text-[#8b949e] text-sm italic border-l-2 border-[#2dd4bf]/40 pl-4 mb-8">'
-            f'Trend Shift: {ctx}</p>'
-        )
 
     for i, block in enumerate(digest_json.content_blocks):
         bullets_html = "\n".join(
@@ -314,7 +346,9 @@ def _render_content_blocks_html(digest_json: DigestStructured) -> str:
             for b in block.tier_2_bullets
         )
 
-        deep_dive_html = _tier3_to_html(block.tier_3_deep_dive)
+        sources, cleaned_deep_dive = _extract_sources(block.tier_3_deep_dive)
+        sources_html   = _render_sources_html(sources)
+        deep_dive_html = _tier3_to_html(cleaned_deep_dive)
 
         code_html = ""
         if block.visual_assets.code_block:
@@ -345,6 +379,7 @@ def _render_content_blocks_html(digest_json: DigestStructured) -> str:
   <div class="mb-4">
     <h2 class="font-serif text-xl text-[#e6edf3] mb-1">{i + 1}. {section_title_e}</h2>
     <p class="text-sm font-semibold text-[#2dd4bf] tracking-wide">{tier1_e}</p>
+    {sources_html}
   </div>
 
   <ul class="space-y-3 text-[#c9d1d9] text-sm list-disc pl-5 mb-5">
