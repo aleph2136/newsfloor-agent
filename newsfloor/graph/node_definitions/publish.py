@@ -397,7 +397,7 @@ def _render_content_blocks_html(digest_json: DigestStructured) -> str:
       <span class="group-open-hide text-[#2dd4bf]">Expand [+]</span>
       <span class="group-open-show" style="display:none;color:#8b949e">Collapse [-]</span>
     </summary>
-    <div class="mt-4 text-[#8b949e] text-sm leading-relaxed space-y-4 cursor-default" onclick="event.stopPropagation();">
+    <div class="prose-content mt-4 text-[#8b949e] text-sm leading-relaxed space-y-4 cursor-default" onclick="event.stopPropagation();">
       {deep_dive_html}
       {code_html}
       {mermaid_html}
