@@ -462,7 +462,7 @@ If today's run has already completed and you want to force a re-run (e.g., for t
 aws lambda invoke `
   --function-name digest-agent-prod `
   --region us-east-1 `
-  --payload '{"force": true}' `
+  --payload '{\"force\": true}' `
   --cli-binary-format raw-in-base64-out `
   response.json
 cat response.json
