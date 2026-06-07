@@ -52,12 +52,13 @@ class Settings(BaseSettings):
     # - topic:    Claude Haiku (structured selection + rationale — drives the whole pipeline)
     # - fetch:    Amazon Nova Lite v2 (article enrichment scraping)
     # - scoring:  Claude Haiku (relevance classification — 9x cheaper than Llama 70B, same quality)
-    # - synthesis writer: Sonnet (highest quality for final output)
-    # - synthesis support agents: Haiku (contextualizer + signal extractor)
+    # - synthesis writer: gemini-3.5-flash (near-zero cost; produces structured JSON digest)
+    # - synthesis support agents: Llama 4 Maverick (contextualizer + signal extractor)
     # - trend signal clustering: Llama 4 Scout (pattern recognition + structured JSON)
     # - trend weekly synthesis: Claude Haiku (prose quality matters; runs once/week)
     # - supervisors: Nova Pro (input) and Llama 4 Maverick (output) — cross-family to avoid monoculture
     # -------------------------------------------------------------------------
+    gemini_model_synthesis:   str = Field(default="gemini/gemini-3.5-flash", description="Gemini model for the digest writer agent. Near-zero cost alternative to Bedrock Sonnet.")
     bedrock_model_synthesis:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
     bedrock_model_synthesis_support: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_topic:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")

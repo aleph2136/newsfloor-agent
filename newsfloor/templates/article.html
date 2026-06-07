@@ -10,8 +10,8 @@
     {{ARTICLE_TITLE}}        - Full article title
     {{ARTICLE_DATE}}         - ISO date string, e.g. 2026-06-01
     {{ARTICLE_DATE_DISPLAY}} - Human-readable date, e.g. June 1, 2026
-    {{ARTICLE_EXCERPT}}      - 1–2 sentence summary (meta description + OG, ~160 chars)
-    {{ARTICLE_BODY}}         - Full article HTML body (paragraphs, headings, lists, etc.)
+    {{ARTICLE_EXCERPT}}      - 1-sentence summary hook (meta description + OG, ~160 chars)
+    {{CONTENT_BLOCKS}}       - Progressive-disclosure content blocks HTML (from digest_json)
     {{SITE_DOMAIN}}          - e.g. sam-griffith.dev (no trailing slash)
     {{AUTHOR_NAME}}          - e.g. Sam Griffith
 -->
@@ -100,6 +100,11 @@
     .article-body code { background: #161b22; border: 1px solid #21262d; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; color: #e6edf3; }
     .article-body hr { border-color: #21262d; margin: 2rem 0; }
     .article-body strong { color: #c9d1d9; font-weight: 600; }
+
+    /* Progressive disclosure — details/summary chevron rotation */
+    details[open] > summary .group-open-rotate { transform: rotate(90deg); }
+    details[open] > summary .group-open-hide { display: none; }
+    details[open] > summary .group-open-show { display: inline; }
   </style>
 </head>
 
@@ -217,10 +222,10 @@
 
       <hr class="border-[#21262d] mb-10" />
 
-      <!-- Article body -->
-      <article class="article-body">
-        {{ARTICLE_BODY}}
-      </article>
+      <!-- Article content blocks (progressive disclosure) -->
+      <div class="space-y-6">
+        {{CONTENT_BLOCKS}}
+      </div>
 
       <!-- Footer -->
       <div class="mt-16 pt-8 border-t border-[#21262d] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -237,5 +242,21 @@
   </main>
 
   <script src="/assets/js/nav.js"></script>
+
+  <!-- Mermaid.js for client-side diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: {
+        background: '#0d1117',
+        primaryColor: '#1e1b4b',
+        primaryTextColor: '#c9d1d9',
+        lineColor: '#30363d'
+      }
+    });
+  </script>
 </body>
 </html>

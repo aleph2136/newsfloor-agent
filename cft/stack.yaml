@@ -88,6 +88,14 @@ Parameters:
     Description: >
       Author name rendered in article page sidebars and article footers,
       e.g. "Sam Griffith".
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: >
+      Google Gemini API key used by the digest writer agent.
+      NoEcho prevents it from appearing in CloudFormation console output.
+      Generate at: https://aistudio.google.com/apikey
  
  
 # =============================================================================
@@ -225,9 +233,7 @@ Resources:
                   # across us-east-1, us-east-2, and us-west-2 at runtime.
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
-                  # Sonnet 4.6 — synthesis writer (uses cross-region inference profile)
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6"
-                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6"
+                  # Sonnet 4.6 — kept for potential fallback; writer now uses Gemini
                   # Amazon Nova Lite v2 — fetch article enrichment
                   - "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0"
@@ -299,9 +305,11 @@ Resources:
           SMTP_SENDER_EMAIL: !Ref SmtpSenderEmail
           SMTP_RECIPIENT_EMAIL: !Ref SmtpRecipientEmail
           SMTP_APP_TOKEN: !Ref SmtpPassword
+          # Gemini — digest writer (near-zero cost; replaces Bedrock Sonnet for synthesis)
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_MODEL_SYNTHESIS: "gemini/gemini-3.5-flash"
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
           BEDROCK_MODEL_SYNTHESIS_SUPPORT: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"
-          BEDROCK_MODEL_SYNTHESIS: "bedrock/us.anthropic.claude-sonnet-4-6"
           BEDROCK_MODEL_TOPIC: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_FETCH: "bedrock/us.amazon.nova-2-lite-v1:0"
           BEDROCK_MODEL_SCORING: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"

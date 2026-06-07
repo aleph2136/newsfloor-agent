@@ -36,6 +36,43 @@ from .primitives import (
     SupervisorDecision,
     TrendStrength,
 )
+
+
+# ---------------------------------------------------------------------------
+# Structured digest data model
+# The new multi-tiered JSON format produced by the synthesis node.
+# Consumed by publish (HTML rendering) and delivery (plain text email).
+# ---------------------------------------------------------------------------
+
+class VisualAssets(BaseModel):
+    mermaid_diagram: str = Field(default="", description="Valid Mermaid.js flowchart or sequence diagram syntax.")
+    code_block:      str = Field(default="", description="Illustrative Python or TypeScript code snippet.")
+
+
+class DigestContentBlock(BaseModel):
+    section_id:        str            = Field(description="Unique block ID, e.g. 'block_1'.")
+    section_title:     str            = Field(description="The specific technical concept or pattern.")
+    tier_1_hook:       str            = Field(description="1-sentence main takeaway for a senior engineer.")
+    tier_2_bullets:    list[str]      = Field(description="2-3 bullets; each starts with **bold anchor** text.")
+    tier_3_deep_dive:  str            = Field(description="Dense technical elaboration, 1-2 paragraphs max.")
+    visual_assets:     VisualAssets   = Field(default_factory=VisualAssets)
+
+
+class DigestMetadata(BaseModel):
+    title:                 str = Field(description="Specific, compelling headline.")
+    date:                  str = Field(description="ISO date, e.g. '2026-06-06'.")
+    summary_hook:          str = Field(description="1-sentence hook: the key question or tension.")
+    overall_trend_context: str = Field(description="1-sentence industry movement this content reflects.")
+
+
+class DigestStructured(BaseModel):
+    """
+    The structured JSON document produced by the synthesis writer agent.
+    Replaces the flat HTML string for downstream rendering and delivery.
+    """
+    article_id:     str                   = Field(description="Unique article ID, e.g. 'YYYY-MM-DD-slug'.")
+    metadata:       DigestMetadata
+    content_blocks: list[DigestContentBlock] = Field(default_factory=list)
  
  
 # ---------------------------------------------------------------------------
@@ -271,10 +308,11 @@ class SynthesisTaskInput(BaseModel):
 class SynthesisTaskResult(BaseModel):
     """The finished digest and signals extracted for the Trend node."""
     run_id:              str
-    digest_html:         str       = Field(description="Fully formatted HTML digest ready for SES.")
-    digest_summary:      str       = Field(description="Plain text 3-5 sentence summary for DynamoDB storage.")
-    new_signals:         list[str] = Field(description="Trend signals extracted from today's articles.")
-    trend_confirmations: list[str] = Field(description="Names of existing trends this run reinforces.")
+    digest_html:         str                    = Field(description="HTML representation generated from digest_json. Used by the output supervisor for quality evaluation.")
+    digest_json:         DigestStructured | None = Field(default=None, description="Structured JSON digest. Used by publish (HTML rendering) and delivery (plain text email).")
+    digest_summary:      str                    = Field(description="Plain text 3-5 sentence summary for DynamoDB storage.")
+    new_signals:         list[str]              = Field(description="Trend signals extracted from today's articles.")
+    trend_confirmations: list[str]              = Field(description="Names of existing trends this run reinforces.")
  
  
 # ---------------------------------------------------------------------------
@@ -309,9 +347,11 @@ class DeliveryTaskInput(BaseModel):
     """Everything needed to send the digest email via SES."""
     run_id:          str
     digest_html:     str
+    digest_json:     DigestStructured | None = Field(default=None, description="Structured JSON digest for plain-text email formatting.")
     topic:           str
     recipient_email: str
     sender_email:    str
+    article_url:     str = Field(default="", description="Published article URL to include in the email footer.")
  
  
 class DeliveryTaskResult(BaseModel):
@@ -330,6 +370,7 @@ class PublishTaskInput(BaseModel):
     """Everything the Publish node needs to upload the article to the personal site."""
     run_id:      str
     digest_html: str
+    digest_json: DigestStructured | None = Field(default=None, description="Structured JSON digest for progressive-disclosure HTML rendering.")
     topic:       str
     bucket:      str = Field(description="S3 bucket name. Empty string skips publish.")
     cf_dist_id:  str = Field(description="CloudFront distribution ID for cache invalidation.")

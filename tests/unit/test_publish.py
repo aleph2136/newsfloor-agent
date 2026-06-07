@@ -20,11 +20,21 @@ from node_definitions.publish import (
     _extract_title,
     _generate_article_list_html,
     _load_manifest,
+    _md_bold_to_html,
+    _render_content_blocks_html,
     _render_sitemap,
+    _tier3_to_html,
     _update_manifest,
     run,
 )
-from contracts.nodes import PublishTaskInput, PublishTaskResult
+from contracts.nodes import (
+    DigestContentBlock,
+    DigestMetadata,
+    DigestStructured,
+    PublishTaskInput,
+    PublishTaskResult,
+    VisualAssets,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -424,3 +434,160 @@ class TestRunErrorPath:
 
         assert isinstance(result, PublishTaskResult)
         assert result.published is False
+
+
+# ---------------------------------------------------------------------------
+# Helpers for new content blocks tests
+# ---------------------------------------------------------------------------
+
+def _minimal_digest_json(**overrides) -> DigestStructured:
+    block = DigestContentBlock(
+        section_id="block_1",
+        section_title="Supervisor Patterns",
+        tier_1_hook="Soft prompts cannot hold state constraints.",
+        tier_2_bullets=[
+            "**State drift accumulates** silently in long-running workflows.",
+            "**Validation loops** must wrap every LLM step.",
+        ],
+        tier_3_deep_dive="When agents run over long horizons their context degrades.\n\nTreating each step as a transaction delta helps pinpoint failures.",
+        visual_assets=VisualAssets(
+            mermaid_diagram="graph TD;\n  A[Agent] -->|No Memory| B(Drift);",
+            code_block="class CheckpointedAgent:\n    pass",
+        ),
+    )
+    ds = DigestStructured(
+        article_id="2026-06-06-test",
+        metadata=DigestMetadata(
+            title="Test Title",
+            date="2026-06-06",
+            summary_hook="A concise hook.",
+            overall_trend_context="Moving toward structured outputs.",
+        ),
+        content_blocks=[block],
+    )
+    return ds
+
+
+# ---------------------------------------------------------------------------
+# _md_bold_to_html
+# ---------------------------------------------------------------------------
+
+class TestMdBoldToHtml:
+
+    def test_converts_bold_anchor_to_strong(self):
+        result = _md_bold_to_html("**State drift** accumulates silently.")
+        assert "<strong>State drift</strong>" in result
+
+    def test_preserves_text_outside_markers(self):
+        result = _md_bold_to_html("**Anchor** rest of body text.")
+        assert "rest of body text." in result
+
+    def test_no_change_when_no_bold(self):
+        text = "Plain text without any bold markers."
+        assert _md_bold_to_html(text) == text
+
+    def test_handles_multiple_bold_segments(self):
+        result = _md_bold_to_html("**First** and **second** anchors.")
+        assert result.count("<strong>") == 2
+
+
+# ---------------------------------------------------------------------------
+# _tier3_to_html
+# ---------------------------------------------------------------------------
+
+class TestTier3ToHtml:
+
+    def test_wraps_single_paragraph_in_p_tag(self):
+        result = _tier3_to_html("Single paragraph of text.")
+        assert "<p" in result
+        assert "Single paragraph of text." in result
+
+    def test_splits_on_double_newline(self):
+        result = _tier3_to_html("Paragraph one.\n\nParagraph two.")
+        assert result.count("<p") == 2
+
+    def test_escapes_html_in_text(self):
+        result = _tier3_to_html("Text with <script>evil()</script>.")
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
+
+    def test_returns_empty_on_blank_input(self):
+        assert _tier3_to_html("") == ""
+
+
+# ---------------------------------------------------------------------------
+# _render_content_blocks_html
+# ---------------------------------------------------------------------------
+
+class TestRenderContentBlocksHtml:
+
+    def test_includes_section_title_in_h2(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "Supervisor Patterns" in result
+        assert "<h2" in result
+
+    def test_includes_tier_1_hook(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "Soft prompts cannot hold state constraints." in result
+
+    def test_includes_tier_2_bullets_with_strong_tags(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "<strong>State drift accumulates</strong>" in result
+
+    def test_includes_overall_trend_context(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "Moving toward structured outputs." in result
+
+    def test_includes_mermaid_diagram(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert 'class="mermaid' in result
+        assert "graph TD;" in result
+
+    def test_includes_code_block(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "<pre" in result
+        assert "CheckpointedAgent" in result
+
+    def test_includes_details_summary_for_disclosure(self):
+        ds = _minimal_digest_json()
+        result = _render_content_blocks_html(ds)
+        assert "<details" in result
+        assert "<summary" in result
+
+    def test_no_code_block_html_when_code_is_empty(self):
+        ds = _minimal_digest_json()
+        ds.content_blocks[0].visual_assets.code_block = ""
+        result = _render_content_blocks_html(ds)
+        assert "<pre" not in result
+
+    def test_no_mermaid_html_when_diagram_is_empty(self):
+        ds = _minimal_digest_json()
+        ds.content_blocks[0].visual_assets.mermaid_diagram = ""
+        result = _render_content_blocks_html(ds)
+        assert 'class="mermaid' not in result
+
+    def test_escapes_title_content(self):
+        ds = _minimal_digest_json()
+        ds.content_blocks[0].section_title = "<script>xss</script>"
+        result = _render_content_blocks_html(ds)
+        assert "<script>" not in result
+
+    def test_numbers_sections_sequentially(self):
+        block2 = DigestContentBlock(
+            section_id="block_2",
+            section_title="Second Block",
+            tier_1_hook="Second hook.",
+            tier_2_bullets=["**Anchor** body."],
+            tier_3_deep_dive="Deep dive.",
+        )
+        ds = _minimal_digest_json()
+        ds.content_blocks.append(block2)
+        result = _render_content_blocks_html(ds)
+        assert "1. Supervisor Patterns" in result
+        assert "2. Second Block" in result

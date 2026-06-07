@@ -35,7 +35,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from config import settings
-from contracts.nodes import PublishTaskInput, PublishTaskResult
+from contracts.nodes import DigestStructured, PublishTaskInput, PublishTaskResult
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +88,16 @@ def run(task_input: PublishTaskInput) -> PublishTaskResult:
     })
 
     try:
-        title     = _extract_title(task_input.digest_html, task_input.topic)
-        excerpt   = _extract_excerpt(task_input.digest_html)
-        body_html = _extract_body(task_input.digest_html)
+        dj = task_input.digest_json
+
+        if dj is not None:
+            title          = dj.metadata.title or _extract_title(task_input.digest_html, task_input.topic)
+            excerpt        = dj.metadata.summary_hook or _extract_excerpt(task_input.digest_html)
+            content_blocks = _render_content_blocks_html(dj)
+        else:
+            title          = _extract_title(task_input.digest_html, task_input.topic)
+            excerpt        = _extract_excerpt(task_input.digest_html)
+            content_blocks = _extract_body(task_input.digest_html)
 
         date_str     = task_input.run_id   # YYYY-MM-DD
         pub_date     = date.fromisoformat(date_str)
@@ -100,7 +107,7 @@ def run(task_input: PublishTaskInput) -> PublishTaskResult:
 
         # 1. Render and upload the article page
         article_html = _render_article(
-            title, excerpt, body_html, date_str, date_display,
+            title, excerpt, content_blocks, date_str, date_display,
             task_input.author_name, task_input.domain,
         )
         s3.put_object(
@@ -264,7 +271,7 @@ def _update_manifest(manifest: list[dict], date_str: str, title: str, excerpt: s
 def _render_article(
     title: str,
     excerpt: str,
-    body_html: str,
+    content_blocks: str,
     date_str: str,
     date_display: str,
     author_name: str,
@@ -276,7 +283,7 @@ def _render_article(
         "{{ARTICLE_DATE}}":         date_str,
         "{{ARTICLE_DATE_DISPLAY}}": date_display,
         "{{ARTICLE_EXCERPT}}":      html_lib.escape(excerpt),
-        "{{ARTICLE_BODY}}":         body_html,
+        "{{CONTENT_BLOCKS}}":       content_blocks,
         "{{SITE_DOMAIN}}":          domain,
         "{{AUTHOR_NAME}}":          html_lib.escape(author_name),
     }
@@ -284,6 +291,99 @@ def _render_article(
     for placeholder, value in replacements.items():
         result = result.replace(placeholder, value)
     return result
+
+
+def _render_content_blocks_html(digest_json: DigestStructured) -> str:
+    """
+    Generates progressive-disclosure HTML from the structured digest JSON.
+    Uses the existing site's dark aesthetic (#0d1117, #2dd4bf teal, Inter/DM Serif fonts)
+    with native <details>/<summary> elements for zero-JS toggleable disclosure.
+    """
+    parts: list[str] = []
+
+    if digest_json.metadata.overall_trend_context:
+        ctx = html_lib.escape(digest_json.metadata.overall_trend_context)
+        parts.append(
+            f'<p class="text-[#8b949e] text-sm italic border-l-2 border-[#2dd4bf]/40 pl-4 mb-8">'
+            f'Trend Shift: {ctx}</p>'
+        )
+
+    for i, block in enumerate(digest_json.content_blocks):
+        bullets_html = "\n".join(
+            f"<li>{_md_bold_to_html(html_lib.escape(b))}</li>"
+            for b in block.tier_2_bullets
+        )
+
+        deep_dive_html = _tier3_to_html(block.tier_3_deep_dive)
+
+        code_html = ""
+        if block.visual_assets.code_block:
+            code_escaped = html_lib.escape(block.visual_assets.code_block)
+            code_html = (
+                '<div class="space-y-2 mt-4">'
+                '<span class="text-[10px] font-mono text-[#8b949e] block uppercase tracking-wider">Reference Architecture</span>'
+                f'<pre class="rounded-lg overflow-x-auto bg-[#0d1117] p-4 font-mono text-xs text-[#c9d1d9] border border-[#21262d]"><code>{code_escaped}</code></pre>'
+                "</div>"
+            )
+
+        mermaid_html = ""
+        if block.visual_assets.mermaid_diagram:
+            mermaid_html = (
+                '<div class="space-y-2 mt-4">'
+                '<span class="text-[10px] font-mono text-[#8b949e] block uppercase tracking-wider">State Interaction Chart</span>'
+                f'<div class="mermaid bg-[#0d1117] p-4 rounded-lg border border-[#21262d]">'
+                f"{block.visual_assets.mermaid_diagram}"
+                "</div>"
+                "</div>"
+            )
+
+        section_title_e = html_lib.escape(block.section_title)
+        tier1_e         = html_lib.escape(block.tier_1_hook)
+
+        parts.append(f"""
+<section class="border border-[#21262d] rounded-xl p-5 md:p-6 bg-[#161b22] hover:border-[#30363d] transition-all duration-200 mb-6">
+  <div class="mb-4">
+    <h2 class="font-serif text-xl text-[#e6edf3] mb-1">{i + 1}. {section_title_e}</h2>
+    <p class="text-sm font-semibold text-[#2dd4bf] tracking-wide">{tier1_e}</p>
+  </div>
+
+  <ul class="space-y-3 text-[#c9d1d9] text-sm list-disc pl-5 mb-5">
+    {bullets_html}
+  </ul>
+
+  <details class="group border-t border-[#21262d] pt-4 cursor-pointer">
+    <summary class="list-none flex items-center justify-between text-xs font-mono font-bold text-[#8b949e] hover:text-[#c9d1d9] select-none">
+      <span class="flex items-center gap-2">
+        <svg class="w-3.5 h-3.5 transform group-open-rotate transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/>
+        </svg>
+        TECHNICAL DEEP DIVE &amp; CODE ARTIFACTS
+      </span>
+      <span class="group-open-hide text-[#2dd4bf]">Expand [+]</span>
+      <span class="group-open-show" style="display:none;color:#8b949e">Collapse [-]</span>
+    </summary>
+    <div class="mt-4 text-[#8b949e] text-sm leading-relaxed space-y-4 cursor-default" onclick="event.stopPropagation();">
+      {deep_dive_html}
+      {code_html}
+      {mermaid_html}
+    </div>
+  </details>
+</section>""")
+
+    return "\n".join(parts)
+
+
+def _md_bold_to_html(text: str) -> str:
+    """Converts **bold** markdown anchors to <strong> HTML."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+
+
+def _tier3_to_html(text: str) -> str:
+    """Converts tier_3_deep_dive multi-paragraph text to <p> tags."""
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [text.strip()] if text.strip() else []
+    return "\n".join(f'<p class="mb-3">{html_lib.escape(p)}</p>' for p in paragraphs)
 
 
 def _render_index(manifest: list[dict], today: date) -> str:

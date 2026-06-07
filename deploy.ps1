@@ -43,6 +43,7 @@ param(
 #   NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME  Display name rendered in article pages
 #
 # Optional (.env keys with defaults shown):
+#   GEMINI_API_KEY                     Gemini API key for AI content generation (if using Gemini instead of Bedrock)
 #   NEWSFLOOR_AWS_REGION               default: "us-east-1"
 #   NEWSFLOOR_STACK_NAME               default: "newsroom-agent"
 #   NEWSFLOOR_ENVIRONMENT              default: "prod"
@@ -94,6 +95,8 @@ $PERSONAL_SITE_BUCKET   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_BUCKET"
 $PERSONAL_SITE_CF_DIST  = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID"
 $PERSONAL_SITE_DOMAIN   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_DOMAIN"
 $PERSONAL_SITE_AUTHOR   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME"
+$GEMINI_API_KEY         = Get-EnvVal "GEMINI_API_KEY"
+
 
 # ECR repository name is derived from the environment — no env var needed
 $ECR_REPO_NAME = "digest-agent-$ENVIRONMENT"
@@ -107,6 +110,7 @@ if (-not $PERSONAL_SITE_BUCKET)   { $missing += "NEWSFLOOR_PERSONAL_SITE_BUCKET"
 if (-not $PERSONAL_SITE_CF_DIST)  { $missing += "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID" }
 if (-not $PERSONAL_SITE_DOMAIN)   { $missing += "NEWSFLOOR_PERSONAL_SITE_DOMAIN" }
 if (-not $PERSONAL_SITE_AUTHOR)   { $missing += "NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME" }
+if (-not $GEMINI_API_KEY)         { $missing += "GEMINI_API_KEY" }
 
 if ($missing.Count -gt 0) {
     Write-Host ""
@@ -121,9 +125,11 @@ if ($missing.Count -gt 0) {
     Write-Host '  NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID = "ABCDEF123456"'         -ForegroundColor Yellow
     Write-Host '  NEWSFLOOR_PERSONAL_SITE_DOMAIN     = "my-site.com"'          -ForegroundColor Yellow
     Write-Host '  NEWSFLOOR_PERSONAL_SITE_AUTHOR_NAME= "Your Name"'            -ForegroundColor Yellow
+    Write-Host '  GEMINI_API_KEY                     = "AIza..."'              -ForegroundColor Yellow
     Write-Host ""
     Write-Host "NEWSFLOOR_SMTP_PASSWORD must be a Gmail App Password, not your account password." -ForegroundColor Yellow
     Write-Host "Generate one at: https://myaccount.google.com/apppasswords" -ForegroundColor Yellow
+    Write-Host "GEMINI_API_KEY can be generated at: https://aistudio.google.com/apikey" -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }
@@ -290,6 +296,7 @@ aws cloudformation deploy `
         "PersonalSiteDistributionId=$PERSONAL_SITE_CF_DIST" `
         "PersonalSiteDomain=$PERSONAL_SITE_DOMAIN" `
         "PersonalSiteAuthorName=$PERSONAL_SITE_AUTHOR" `
+        "GeminiApiKey=$GEMINI_API_KEY" `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -ne 0) {

@@ -321,12 +321,20 @@ def delivery_node(state: DigestGraphState) -> dict:
     from node_definitions.delivery import run as delivery_run
     from contracts.nodes import DeliveryTaskInput
 
+    # Build the expected article URL so the email can link to it even though
+    # the publish node runs after delivery. The URL is deterministic: domain + run_id.
+    article_url = ""
+    if settings.personal_site_domain:
+        article_url = f"https://{settings.personal_site_domain}/articles/{state['run_id']}.html"
+
     task_input = DeliveryTaskInput(
         run_id          = state["run_id"],
         digest_html     = synthesis_result.digest_html,
+        digest_json     = synthesis_result.digest_json,
         topic           = topic_result.topic,
         recipient_email = settings.smtp_recipient_email,
         sender_email    = settings.smtp_sender_email,
+        article_url     = article_url,
     )
  
     result = delivery_run(task_input)
@@ -364,6 +372,7 @@ def publish_node(state: DigestGraphState) -> dict:
     task_input = PublishTaskInput(
         run_id      = state["run_id"],
         digest_html = synthesis_result.digest_html,
+        digest_json = synthesis_result.digest_json,
         topic       = topic_result.topic,
         bucket      = settings.personal_site_bucket,
         cf_dist_id  = settings.personal_site_cf_dist_id,

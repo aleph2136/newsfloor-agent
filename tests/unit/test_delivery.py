@@ -2,7 +2,8 @@
 #
 # Unit tests for the delivery node. All network I/O is patched — no SMTP
 # connections are made. Tests cover subject extraction, HTML-to-text
-# conversion, the happy-path send, and the failure-return contract.
+# conversion, the JSON plain-text format, the happy-path send, and the
+# failure-return contract.
 
 import smtplib
 from unittest.mock import MagicMock, patch
@@ -12,9 +13,18 @@ import pytest
 from node_definitions.delivery import (
     _extract_subject,
     _html_to_text,
+    _json_to_plain_text,
+    _split_bold_bullet,
     run,
 )
-from contracts.nodes import DeliveryTaskInput, DeliveryTaskResult
+from contracts.nodes import (
+    DeliveryTaskInput,
+    DeliveryTaskResult,
+    DigestContentBlock,
+    DigestMetadata,
+    DigestStructured,
+    VisualAssets,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +41,31 @@ def _task_input(**overrides) -> DeliveryTaskInput:
     }
     base.update(overrides)
     return DeliveryTaskInput(**base)
+
+
+def _minimal_digest_json() -> DigestStructured:
+    return DigestStructured(
+        article_id="2026-06-06-test",
+        metadata=DigestMetadata(
+            title="Supervisor Patterns at Scale",
+            date="2026-06-06",
+            summary_hook="Why long-running agents lose coherence.",
+            overall_trend_context="The industry is moving toward strict state boundaries.",
+        ),
+        content_blocks=[
+            DigestContentBlock(
+                section_id="block_1",
+                section_title="Soft State Nudges Fail",
+                tier_1_hook="Soft system prompts cannot hold constraints over 10+ steps.",
+                tier_2_bullets=[
+                    "**State drift accumulates** silently before exceptions surface.",
+                    "**Validation loops** must wrap LLM steps for schema fidelity.",
+                ],
+                tier_3_deep_dive="Technical deep dive here.",
+                visual_assets=VisualAssets(),
+            )
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +95,94 @@ class TestExtractSubject:
     def test_case_insensitive_h1_match(self):
         html = "<H1>Case Insensitive</H1>"
         assert _extract_subject(html, "topic") == "Digest: Case Insensitive"
+
+    def test_uses_digest_json_title_when_available(self):
+        dj = _minimal_digest_json()
+        result = _extract_subject("<h1>Old HTML Title</h1>", "topic", digest_json=dj)
+        assert result == "Digest: Supervisor Patterns at Scale"
+
+    def test_json_title_takes_precedence_over_h1(self):
+        dj = _minimal_digest_json()
+        result = _extract_subject("<h1>HTML Title</h1>", "topic", digest_json=dj)
+        assert "Supervisor Patterns at Scale" in result
+        assert "HTML Title" not in result
+
+
+# ---------------------------------------------------------------------------
+# _split_bold_bullet
+# ---------------------------------------------------------------------------
+
+class TestSplitBoldBullet:
+
+    def test_splits_standard_bold_anchor(self):
+        anchor, body = _split_bold_bullet("**State drift accumulates** silently inside workflows.")
+        assert anchor == "State drift accumulates"
+        assert body == "silently inside workflows."
+
+    def test_returns_empty_when_no_bold(self):
+        anchor, body = _split_bold_bullet("No bold here just text.")
+        assert anchor == ""
+        assert body == ""
+
+    def test_strips_whitespace_from_anchor(self):
+        anchor, body = _split_bold_bullet("**  Padded anchor  ** rest of text.")
+        assert anchor == "Padded anchor"
+
+    def test_handles_multi_word_anchor(self):
+        anchor, body = _split_bold_bullet("**Deterministic validation loops** must wrap LLM steps.")
+        assert anchor == "Deterministic validation loops"
+        assert body == "must wrap LLM steps."
+
+
+# ---------------------------------------------------------------------------
+# _json_to_plain_text
+# ---------------------------------------------------------------------------
+
+class TestJsonToPlainText:
+
+    def test_includes_title_in_header(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        assert "Supervisor Patterns at Scale" in result
+
+    def test_includes_overall_trend_context(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        assert "strict state boundaries" in result
+
+    def test_formats_block_with_hook(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        assert "Soft State Nudges Fail" in result
+        assert "Soft system prompts cannot hold constraints" in result
+
+    def test_formats_bullets_as_anchor_arrow_body(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        assert "[State drift accumulates] ->" in result
+        assert "[Validation loops] ->" in result
+
+    def test_includes_article_url_when_provided(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj, "https://sam-griffith.dev/articles/2026-06-06.html")
+        assert "https://sam-griffith.dev/articles/2026-06-06.html" in result
+
+    def test_no_url_line_when_url_empty(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj, "")
+        assert "https://" not in result
+
+    def test_no_html_tags_in_output(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        # The "->" arrow is intentional formatting, but no HTML tags should appear
+        import re
+        assert not re.search(r"<[a-zA-Z/][^>]*>", result)
+
+    def test_no_markdown_bold_markers_in_output(self):
+        dj = _minimal_digest_json()
+        result = _json_to_plain_text(dj)
+        assert "**" not in result
 
 
 # ---------------------------------------------------------------------------
