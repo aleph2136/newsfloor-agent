@@ -6,14 +6,14 @@
     - [GITHUB_URL] / [LINKEDIN_URL] replaced with "#" (fill in real URLs to personalize)
     - This file is deployed inside the Lambda Docker image, not to S3 directly.
 
-  Placeholders replaced by publish.py:
-    {{ARTICLE_TITLE}}        - Full article title
-    {{ARTICLE_DATE}}         - ISO date string, e.g. 2026-06-01
-    {{ARTICLE_DATE_DISPLAY}} - Human-readable date, e.g. June 1, 2026
-    {{ARTICLE_EXCERPT}}      - 1-sentence summary hook (meta description + OG, ~160 chars)
-    {{CONTENT_BLOCKS}}       - Progressive-disclosure content blocks HTML (from digest_json)
-    {{SITE_DOMAIN}}          - e.g. sam-griffith.dev (no trailing slash)
-    {{AUTHOR_NAME}}          - e.g. Sam Griffith
+  Placeholders replaced by publish.py (listed without braces to prevent accidental substitution):
+    ARTICLE_TITLE        - Full article title
+    ARTICLE_DATE         - ISO date string, e.g. 2026-06-01
+    ARTICLE_DATE_DISPLAY - Human-readable date, e.g. June 1, 2026
+    ARTICLE_EXCERPT      - 1-sentence summary hook (meta description + OG, ~160 chars)
+    CONTENT_BLOCKS       - Progressive-disclosure content blocks HTML (from digest_json)
+    SITE_DOMAIN          - e.g. sam-griffith.dev (no trailing slash)
+    AUTHOR_NAME          - e.g. Sam Griffith
 -->
 <html lang="en">
 <head>
