@@ -5,10 +5,8 @@
 
 import pytest
 
-from node_definitions.synthesis import (
-    _sanitize_digest_html,
-    _strip_markdown_fences,
-)
+from node_definitions.synthesis.html import sanitize_digest_html as _sanitize_digest_html
+from node_definitions.synthesis.parsers import strip_markdown_fences as _strip_markdown_fences
 
 
 # ---------------------------------------------------------------------------

@@ -5,11 +5,9 @@
 
 import pytest
 
-from node_definitions.synthesis import (
-    _digest_json_to_html,
-    _parse_digest_json,
-    _strip_markdown_fences,
-)
+from node_definitions.synthesis.html import digest_json_to_html as _digest_json_to_html
+from node_definitions.synthesis.parsers import parse_digest_json as _parse_digest_json
+from node_definitions.synthesis.parsers import strip_markdown_fences as _strip_markdown_fences
 from contracts.nodes import DigestContentBlock, DigestMetadata, DigestStructured, VisualAssets
 
 

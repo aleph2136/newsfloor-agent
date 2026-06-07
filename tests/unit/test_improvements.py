@@ -200,8 +200,8 @@ class TestParseRelevanceOutputFenceStripping:
 class TestParseSignalsOutputFenceStripping:
 
     def _parse(self, raw):
-        from node_definitions.synthesis import _parse_signals_output
-        return _parse_signals_output(raw)
+        from node_definitions.synthesis.parsers import parse_signals_output
+        return parse_signals_output(raw)
 
     def _valid_payload(self) -> str:
         return json.dumps({
@@ -329,8 +329,8 @@ class TestSynthesisApplyRetryAdjustments:
         )
 
     def _adjust(self, task_input):
-        from node_definitions.synthesis import _apply_retry_adjustments
-        return _apply_retry_adjustments(task_input)
+        from node_definitions.synthesis.retry import apply_retry_adjustments
+        return apply_retry_adjustments(task_input)
 
     def test_no_retry_returns_empty_string(self):
         from contracts.nodes import SynthesisTaskInput, EngineerProfile
