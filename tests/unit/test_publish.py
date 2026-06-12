@@ -18,15 +18,14 @@ from node_definitions.publish import (
     _extract_body,
     _extract_excerpt,
     _extract_title,
-    _generate_article_list_html,
     _load_manifest,
-    _md_bold_to_html,
     _render_content_blocks_html,
     _render_sitemap,
-    _tier3_to_html,
     _update_manifest,
     run,
 )
+from node_definitions.publish.content_blocks import _md_bold_to_html, _tier3_to_html
+from node_definitions.publish.page_renderers import _generate_article_list_html
 from contracts.nodes import (
     DigestContentBlock,
     DigestMetadata,
@@ -291,28 +290,28 @@ class TestGenerateArticleListHtml:
 
     def test_today_entry_rendered_with_featured_markup(self):
         entries = [_manifest_entry("2026-06-01")]
-        with patch("node_definitions.publish.date", self._date_mock()):
+        with patch("node_definitions.publish.page_renderers.date", self._date_mock()):
             result = _generate_article_list_html(entries, real_date(2026, 6, 1))
         assert "Today" in result
         assert "Latest" in result
 
     def test_older_entries_wrapped_in_details_element(self):
         entries = [_manifest_entry("2026-05-01"), _manifest_entry("2026-05-15")]
-        with patch("node_definitions.publish.date", self._date_mock()):
+        with patch("node_definitions.publish.page_renderers.date", self._date_mock()):
             result = _generate_article_list_html(entries, real_date(2026, 6, 1))
         assert "<details" in result
         assert "previous article" in result
 
     def test_single_older_article_uses_singular_label(self):
         entries = [_manifest_entry("2026-05-01")]
-        with patch("node_definitions.publish.date", self._date_mock()):
+        with patch("node_definitions.publish.page_renderers.date", self._date_mock()):
             result = _generate_article_list_html(entries, real_date(2026, 6, 1))
         assert "1 previous article" in result
         assert "1 previous articles" not in result
 
     def test_multiple_older_articles_uses_plural_label(self):
         entries = [_manifest_entry("2026-05-01"), _manifest_entry("2026-05-10")]
-        with patch("node_definitions.publish.date", self._date_mock()):
+        with patch("node_definitions.publish.page_renderers.date", self._date_mock()):
             result = _generate_article_list_html(entries, real_date(2026, 6, 1))
         assert "2 previous articles" in result
 

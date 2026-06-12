@@ -267,6 +267,29 @@
   </div>
 
   <script src="/assets/js/nav.js"></script>
+
+  <!-- Mermaid for modal diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: {
+        background: '#0d1117',
+        primaryColor: '#1e1b4b',
+        primaryTextColor: '#c9d1d9',
+        lineColor: '#30363d'
+      }
+    });
+    window._renderMermaid = function (container) {
+      var nodes = Array.from(container.querySelectorAll('.mermaid'));
+      if (nodes.length > 0) {
+        mermaid.run({ nodes: nodes });
+      }
+    };
+  </script>
+
   <script>
     (function () {
       'use strict';
@@ -302,6 +325,9 @@
             var body = doc.querySelector('.article-body');
             if (body) {
               modalBody.innerHTML = body.innerHTML;
+              if (typeof window._renderMermaid === 'function') {
+                window._renderMermaid(modalBody);
+              }
             } else {
               modalBody.innerHTML = '<p>Could not load article body. <a href="' + url + '" class="text-[#2dd4bf] underline">Open directly.</a></p>';
             }

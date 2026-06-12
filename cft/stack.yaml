@@ -32,7 +32,7 @@ Parameters:
  
   ScheduleExpression:
     Type: String
-    Default: "cron(0 12 * * ? *)"
+    Default: "cron(0 7 * * ? *)"
     Description: >
       EventBridge schedule in UTC. Default is 7am Eastern (12:00 UTC).
       Adjust for your timezone. Uses AWS cron syntax.

@@ -59,10 +59,11 @@ class DigestContentBlock(BaseModel):
 
 
 class DigestMetadata(BaseModel):
-    title:                 str = Field(description="Specific, compelling headline.")
-    date:                  str = Field(description="ISO date, e.g. '2026-06-06'.")
-    summary_hook:          str = Field(description="1-sentence hook: the key question or tension.")
-    overall_trend_context: str = Field(description="1-sentence industry movement this content reflects.")
+    title:                  str        = Field(description="Specific, compelling headline.")
+    date:                   str        = Field(description="ISO date, e.g. '2026-06-06'.")
+    summary_hook:           str        = Field(description="1-sentence hook: the key question or tension.")
+    overall_trend_context:  str        = Field(description="1-sentence industry movement this content reflects.")
+    trend_signals_roundup:  list[str]  = Field(default_factory=list, description="3-5 bullets summarizing trend movements from today's content.")
 
 
 class DigestStructured(BaseModel):

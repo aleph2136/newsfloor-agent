@@ -205,7 +205,12 @@ OUTPUT JSON SCHEMA (return ONLY this JSON, nothing else):
     "title": "<Specific, compelling headline — not generic>",
     "date": "<YYYY-MM-DD>",
     "summary_hook": "<1 sentence: the key question or tension this digest addresses>",
-    "overall_trend_context": "<1 sentence: the broader industry movement today's content reflects>"
+    "overall_trend_context": "<1 sentence: the broader industry movement today's content reflects>",
+    "trend_signals_roundup": [
+      "<bullet: name an active trend and state whether today confirmed, challenged, or extended it>",
+      "<bullet: name another trend or a newly emerging signal not yet in the tracked list>",
+      "<add 1-3 more bullets as needed — 3-5 total>"
+    ]
   }},
   "content_blocks": [
     {{
@@ -240,8 +245,6 @@ CONTENT REQUIREMENTS PER BLOCK:
 6. code_block: Illustrative Python or TypeScript snippet. Modern syntax. No boilerplate.
 
 Create one content block per major article or concept covered. Use all provided articles.
-Include a final "Trend Signals" block summarizing what today's content reveals about
-where agentic engineering is moving.
 
 WRITING STANDARDS (apply to all tier text):
 - Assume deep familiarity with LangGraph, CrewAI, Pydantic, supervisor nodes.
@@ -251,7 +254,14 @@ WRITING STANDARDS (apply to all tier text):
 - Connect content blocks to each other where genuine connections exist
 - Each tier_1_hook must give a concrete takeaway, not a general observation about the field
 - Never reproduce verbatim language from source articles
-- tier_3_deep_dive must cite sources as: 'Source: [Title] — [Author] (URL)'{depth_note}
+- tier_3_deep_dive source citations: ONLY cite a source when the fact, announcement, or
+  finding maps directly to one of the provided articles above — use that article's exact URL.
+  Format: Source: [Title] — [Author] (URL). Never fabricate a URL or an author name.
+  For insights derived from synthesizing patterns across multiple articles (not attributable
+  to a single source), begin that sentence or paragraph with "[AI Synthesis]" — no Source line.
+- trend_signals_roundup (in metadata): 3-5 bullets. Each names a specific active trend from
+  the ACTIVE TRENDS list and states whether today's content confirmed, challenged, or extended
+  it — or names a newly emerging signal not yet in the tracked list.{depth_note}
 
 Return ONLY the JSON object. No prose before or after. No markdown fences.
         """,
