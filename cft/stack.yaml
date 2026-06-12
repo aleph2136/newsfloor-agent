@@ -309,6 +309,7 @@ Resources:
           GEMINI_API_KEY: !Ref GeminiApiKey
           GEMINI_MODEL_SYNTHESIS: "gemini/gemini-3.5-flash"
           # Bedrock model IDs — must match model IDs in AWS Bedrock console
+          BEDROCK_MODEL_SYNTHESIS: "bedrock/us.anthropic.claude-sonnet-4-6"
           BEDROCK_MODEL_SYNTHESIS_SUPPORT: "bedrock/us.meta.llama4-maverick-17b-instruct-v1:0"
           BEDROCK_MODEL_TOPIC: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
           BEDROCK_MODEL_FETCH: "bedrock/us.amazon.nova-2-lite-v1:0"

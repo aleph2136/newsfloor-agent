@@ -70,7 +70,7 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
 
     # Gemini for the writer — near-zero cost at equal quality for JSON synthesis.
     # Bedrock Maverick for support agents (contextualizer + signal extractor).
-    llm_writer  = LLM(model=settings.gemini_model_synthesis, max_retries=1)
+    llm_writer  = LLM(model=settings.bedrock_model_synthesis, max_retries=1)
     llm_support = LLM(model=settings.bedrock_model_synthesis_support, max_retries=1)
 
     crew, write_task, extract_task = build_synthesis_crew(
@@ -82,7 +82,7 @@ def run(task_input: SynthesisTaskInput) -> SynthesisTaskResult:
 
     kickoff_crew(
         crew, "synthesis", task_input.run_id,
-        [settings.gemini_model_synthesis, settings.bedrock_model_synthesis_support],
+        [settings.bedrock_model_synthesis, settings.bedrock_model_synthesis_support],
     )
 
     # -------------------------------------------------------------------------

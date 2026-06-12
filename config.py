@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     # - topic:    Claude Haiku (structured selection + rationale — drives the whole pipeline)
     # - fetch:    Amazon Nova Lite v2 (article enrichment scraping)
     # - scoring:  Claude Haiku (relevance classification — 9x cheaper than Llama 70B, same quality)
-    # - synthesis writer: gemini-3.5-flash (near-zero cost; produces structured JSON digest)
+    # - synthesis writer: Claude Sonnet (prose quality matters for the digest; runs every weekday)
     # - synthesis support agents: Llama 4 Maverick (contextualizer + signal extractor)
     # - trend signal clustering: Llama 4 Scout (pattern recognition + structured JSON)
     # - trend weekly synthesis: Claude Haiku (prose quality matters; runs once/week)
