@@ -2,7 +2,6 @@
   "https://simonwillison.net/atom/everything/",
   "https://lilianweng.github.io/index.xml",
   "https://openai.com/news/rss.xml",
-  "https://huggingface.co/blog/feed.xml",
   "https://towardsdatascience.com/feed",
   "https://blog.crewai.com/rss/",
   "https://huyenchip.com/feed.xml",
@@ -15,5 +14,15 @@
   "https://magazine.sebastianraschka.com/feed",
   "https://www.latent.space/feed",
   "https://addyosmani.com/rss.xml",
-  "https://blog.pragmaticengineer.com/rss"
+  "https://blog.pragmaticengineer.com/rss",
+  "https://newsletter.pragmaticengineer.com/feed",
+  "https://benjiweber.co.uk/blog/feed",
+  "https://blog.bytebytego.com/feed",
+  "https://aws.amazon.com/blogs/architecture/feed/",
+  "https://aws.amazon.com/blogs/containers/feed/",
+  "https://kubernetes.io/feed.xml",
+  "https://grafana.com/blog/index.xml",
+  "https://www.hashicorp.com/blog/feed.xml",
+  "https://www.databricks.com/feed",
+  "https://www.fast.ai/index.xml"
 ]

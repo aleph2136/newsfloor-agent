@@ -100,6 +100,8 @@ def build_synthesis_crew(
             "hype, and practical applicability over theoretical interest. "
             "You write in a conversational, down-to-earth tone — like a knowledgeable "
             "colleague explaining something over coffee, not a textbook or a press release. "
+            "You prefer to write about practical techniques, architectural patterns, and governance approaches that "
+            "are directly applicable to real-world engineering challenges. "
             "You use plain language by default and only reach for technical terms when "
             "they genuinely add precision. You never stack jargon. You keep things "
             "readable without dumbing them down. You connect the dots between articles "

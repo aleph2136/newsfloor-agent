@@ -17,7 +17,7 @@ Execution order
 2. Deterministic: update source reputation scores
    → Logs prior and post scores for any domain with delta >= 0.1
 3. Conditional LLM: cluster and classify new signals (if any)
-4. Conditional LLM: weekly synthesis (Mondays only)
+4. Conditional LLM: weekly synthesis (first run of each ISO week)
 5. Deterministic: write RunRecord — always last
 """
  
@@ -41,6 +41,8 @@ from .db_writer import (
 from .signal_analysis import classify_new_trends, cluster_signals
 from .strength import apply_strength_update
 from .weekly_synthesis import write_weekly_synthesis
+
+from contracts.state import current_week_id
  
 logger = logging.getLogger(__name__)
  
@@ -152,9 +154,9 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
             logger.error({"node": "trend", "error": error_msg})
  
     # -------------------------------------------------------------------------
-    # 4. Weekly synthesis (LLM — Mondays only)
+    # 4. Weekly synthesis (LLM — once per ISO week, first run of the week wins)
     # -------------------------------------------------------------------------
-    if _is_monday():
+    if _needs_weekly_synthesis(db):
         try:
             write_weekly_synthesis(db=db, llm=llm_weekly, now=now)
         except Exception as e:
@@ -207,6 +209,10 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
     )
  
  
-def _is_monday() -> bool:
-    return datetime.now(timezone.utc).weekday() == 0
+def _needs_weekly_synthesis(db: DynamoDBService) -> bool:
+    """Returns True if no synthesis has been written for the current ISO week yet."""
+    recent = db.get_recent_weekly_syntheses(count=1)
+    if not recent:
+        return True
+    return recent[0].week_id != current_week_id()
  

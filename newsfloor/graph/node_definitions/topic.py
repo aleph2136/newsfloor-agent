@@ -197,6 +197,7 @@ The focus angle must:
   (e.g., "platform teams operating LLM pipelines", "teams shipping agent-based products to users")
 - Add a lens or constraint that the topic alone does not provide
 - Connect directly to engineering practice — a practitioner should be able to act on it
+- Lean toward practical, real-world engineering concerns and ideas rather than abstract or strictly academic questions
 - Be a single sentence starting with an action verb
 
 The focus angle must NOT:

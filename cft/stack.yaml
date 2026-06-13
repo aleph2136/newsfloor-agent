@@ -32,10 +32,12 @@ Parameters:
  
   ScheduleExpression:
     Type: String
-    Default: "cron(0 7 * * ? *)"
+    Default: "rate(2 days)"
     Description: >
-      EventBridge schedule in UTC. Default is 7am Eastern (12:00 UTC).
-      Adjust for your timezone. Uses AWS cron syntax.
+      EventBridge schedule. Default fires every other day (rate expression,
+      not pinned to a specific time-of-day — first fire anchors the cadence).
+      Override with a cron expression to pin to a specific time, e.g.
+      "cron(0 12 */2 * ? *)" for 12:00 UTC every other day.
  
   LambdaTimeout:
     Type: Number
@@ -340,8 +342,8 @@ Resources:
   DigestScheduleRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "digest-agent-daily-${Environment}"
-      Description: "Triggers the digest agent Lambda every morning"
+      Name: !Sub "digest-agent-schedule-${Environment}"
+      Description: "Triggers the digest agent Lambda every other day"
       ScheduleExpression: !Ref ScheduleExpression
       State: ENABLED
       Targets:

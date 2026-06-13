@@ -3,7 +3,7 @@ nodes/trend/weekly_synthesis.py
 
 Weekly synthesis record assembly and LLM narrative generation.
 
-Called only on Mondays. Reads the last 7 RunRecords, computes signal
+Called on the first run of each ISO week. Reads the last 7 days of RunRecords, computes signal
 patterns deterministically, then uses an LLM agent to produce a
 human-readable narrative describing what the week's pattern means.
 
