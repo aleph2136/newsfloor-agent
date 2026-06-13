@@ -213,15 +213,15 @@ DYNAMODB_TRENDS_TABLE=digest-trends-prod
 DYNAMODB_SOURCES_TABLE=digest-sources-prod
 
 # Bedrock models — change these to swap providers per node
-BEDROCK_MODEL_TOPIC=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_TOPIC=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 BEDROCK_MODEL_FETCH=bedrock/us.amazon.nova-2-lite-v1:0
 BEDROCK_MODEL_SCORING=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 BEDROCK_MODEL_SYNTHESIS=bedrock/us.anthropic.claude-sonnet-4-6
 BEDROCK_MODEL_SYNTHESIS_SUPPORT=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 BEDROCK_MODEL_TREND=bedrock/us.meta.llama4-scout-17b-instruct-v1:0
-BEDROCK_MODEL_TREND_WEEKLY=bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+BEDROCK_MODEL_TREND_WEEKLY=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
 BEDROCK_MODEL_INPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
-BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
+BEDROCK_MODEL_OUTPUT_SUPERVISOR=bedrock/us.amazon.nova-pro-v1:0
 
 # Pipeline tuning (optional — these are the defaults)
 SCORE_THRESHOLD=0.5

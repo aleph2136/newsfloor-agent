@@ -48,26 +48,38 @@ class Settings(BaseSettings):
     smtp_app_token:       str = Field(default="")
  
     # -------------------------------------------------------------------------
-    # Bedrock model config
-    # - topic:    Claude Haiku (structured selection + rationale — drives the whole pipeline)
-    # - fetch:    Amazon Nova Lite v2 (article enrichment scraping)
-    # - scoring:  Claude Haiku (relevance classification — 9x cheaper than Llama 70B, same quality)
-    # - synthesis writer: Claude Sonnet (prose quality matters for the digest; runs every weekday)
-    # - synthesis support agents: Llama 4 Maverick (contextualizer + signal extractor)
-    # - trend signal clustering: Llama 4 Scout (pattern recognition + structured JSON)
-    # - trend weekly synthesis: Claude Haiku (prose quality matters; runs once/week)
-    # - supervisors: Nova Pro (input) and Llama 4 Maverick (output) — cross-family to avoid monoculture
+    # Model config — Bedrock (default) + Gemini fallback for synthesis
+    #
+    # - topic:    Llama 4 Maverick — topic selection requires reasoning over a rotating recency
+    #             window and structured JSON output; Maverick handles this reliably at lower cost
+    #             than Sonnet and with more reasoning depth than Haiku
+    # - fetch:    Amazon Nova 2 Lite — article enrichment is high-volume, low-complexity extraction;
+    #             cheapest Bedrock-native model, low latency per article
+    # - scoring:  Llama 4 Maverick — relevance classification requires nuanced judgment against the
+    #             chosen topic; Maverick's structured output and reasoning justify the step up from Haiku
+    # - synthesis writer: Claude Sonnet 4.6 (primary) / Gemini 3.5 Flash (near-zero cost fallback)
+    #             — the digest prose is the user-visible output; Sonnet 4.6 is the best quality/cost
+    #             balance for long-form writing; Gemini Flash is available when cost is the constraint
+    # - synthesis support agents: Llama 4 Maverick — contextualizer + signal extractor are structured
+    #             extraction tasks feeding the writer; Maverick handles multi-turn JSON reliably at scale
+    # - trend signal clustering: Llama 4 Scout — batch pattern recognition over extended signal windows;
+    #             Scout is optimized for throughput and structured JSON on large contexts
+    # - trend weekly synthesis: Llama 4 Maverick — reasoning over accumulated trend data to produce a
+    #             weekly narrative; Maverick provides the depth this task needs (Haiku was under-resourced)
+    # - supervisors: Nova Pro (both input + output) — fastest capable Bedrock-native model for gate/
+    #             validation tasks; cross-family diversity is achieved via Llama 4 / Anthropic / Nova
+    #             mix elsewhere in the pipeline rather than splitting supervisor models
     # -------------------------------------------------------------------------
     gemini_model_synthesis:   str = Field(default="gemini/gemini-3.5-flash", description="Gemini model for the digest writer agent. Near-zero cost alternative to Bedrock Sonnet.")
     bedrock_model_synthesis:  str = Field(default="bedrock/us.anthropic.claude-sonnet-4-6")
     bedrock_model_synthesis_support: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
-    bedrock_model_topic:   str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    bedrock_model_topic:   str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_fetch:   str = Field(default="bedrock/us.amazon.nova-2-lite-v1:0")
     bedrock_model_scoring: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_trend:        str = Field(default="bedrock/us.meta.llama4-scout-17b-instruct-v1:0")
-    bedrock_model_trend_weekly: str = Field(default="bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    bedrock_model_trend_weekly: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
     bedrock_model_input_supervisor:  str = Field(default="bedrock/us.amazon.nova-pro-v1:0")
-    bedrock_model_output_supervisor: str = Field(default="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0")
+    bedrock_model_output_supervisor: str = Field(default="bedrock/us.amazon.nova-pro-v1:0")
  
     # -------------------------------------------------------------------------
     # Pipeline tuning parameters
