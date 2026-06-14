@@ -41,7 +41,9 @@ adjustments (e.g. clearing recent_topics on LOW_CONFIDENCE) actually take effect
 """
 
 from __future__ import annotations
+import json
 import logging
+import re
 from dataclasses import dataclass
 
 from crewai import Agent, Crew, Process, Task
@@ -223,7 +225,7 @@ Return a JSON object with exactly these fields:
             "A JSON object with fields: topic, focus_angle, rationale, confidence."
         ),
         agent=refiner,
-        output_pydantic=TopicTaskResult,
+        output_json=True,
     )
  
     # -------------------------------------------------------------------------
@@ -238,15 +240,10 @@ Return a JSON object with exactly these fields:
  
     kickoff_crew(crew, "topic", task_input.run_id, [settings.bedrock_model_topic])
 
-    # Guard against CrewAI deserialization failure — output_pydantic is None
-    # if the LLM returned malformed JSON or the crew failed internally.
-    if not refine_task.output or not refine_task.output.pydantic:
-        raw = refine_task.output.raw if refine_task.output else "None"
-        raise RuntimeError(
-            f"Topic crew failed to produce a valid TopicTaskResult. Raw output: {raw!r}"
-        )
+    if not refine_task.output or not refine_task.output.raw:
+        raise RuntimeError("Topic crew produced no output")
 
-    task_result: TopicTaskResult = refine_task.output.pydantic
+    task_result: TopicTaskResult = _parse_topic_result(refine_task.output.raw)
  
     logger.info({
         "node":        "topic",
@@ -262,6 +259,26 @@ Return a JSON object with exactly these fields:
 # Helpers
 # ---------------------------------------------------------------------------
  
+def _parse_topic_result(raw: str) -> TopicTaskResult:
+    """
+    Parse TopicTaskResult from the raw LLM text output.
+
+    Strips markdown code fences if present before parsing JSON.
+    Raises RuntimeError with the raw text if parsing fails.
+    """
+    text = raw.strip()
+    # Strip ```json ... ``` or ``` ... ``` fences
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        return TopicTaskResult.model_validate(json.loads(text))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Topic crew returned unparseable output: {exc}\nRaw: {raw!r}"
+        ) from exc
+
+
 def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
     """
     Reads the retry_instruction and returns a fully resolved TopicPromptContext.
