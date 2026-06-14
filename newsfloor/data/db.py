@@ -132,6 +132,23 @@ class DynamoDBService:
             logger.error({"method": "put_run_record", "run_id": record.run_id, "error": str(e)})
             raise
 
+    def mark_run_failed(self, run_id: str) -> None:
+        """Sets run status to FAILED without overwriting partial run data."""
+        from contracts.primitives import RunStatus
+        from datetime import datetime
+        try:
+            self._runs.update_item(
+                Key={"run_id": run_id},
+                UpdateExpression="SET #s = :s, completed_at = :t",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={
+                    ":s": RunStatus.FAILED.value,
+                    ":t": datetime.utcnow().isoformat(),
+                },
+            )
+        except ClientError as e:
+            logger.error({"method": "mark_run_failed", "run_id": run_id, "error": str(e)})
+
     # -------------------------------------------------------------------------
     # Weekly Synthesis
     # -------------------------------------------------------------------------

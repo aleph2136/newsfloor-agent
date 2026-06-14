@@ -87,12 +87,8 @@ def lambda_handler(event: dict, context) -> dict:
             if existing and existing.status == RunStatus.IN_PROGRESS:
                 logger.warning(json.dumps({
                     "run_id":  run_id,
-                    "message": "Force flag set but run is already IN_PROGRESS — blocking to prevent concurrent re-run",
+                    "message": "Force flag overriding IN_PROGRESS run — prior run may have crashed without updating status",
                 }))
-                return {
-                    "statusCode": 409,
-                    "body": json.dumps({"run_id": run_id, "status": "blocked — run already in progress"}),
-                }
             logger.info(json.dumps({"run_id": run_id, "message": "Force flag set — clearing prior run record"}))
             _DB().delete_run_record(run_id)
         except Exception as e:
@@ -136,6 +132,15 @@ def lambda_handler(event: dict, context) -> dict:
             "error":   str(e),
             "message": "Pipeline failed with unhandled exception",
         }))
+        try:
+            from data.db import DynamoDBService
+            DynamoDBService().mark_run_failed(run_id)
+        except Exception as db_err:
+            logger.error(json.dumps({
+                "run_id":  run_id,
+                "error":   str(db_err),
+                "message": "Failed to write FAILED status after crash",
+            }))
         return {
             "statusCode": 500,
             "body": json.dumps({"run_id": run_id, "status": "error", "error": str(e)}),
