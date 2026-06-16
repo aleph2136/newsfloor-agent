@@ -84,6 +84,8 @@ def run(task_input: TrendTaskInput) -> TrendTaskResult:
             was_reinforced     = t.name in confirmed_names,
             now                = now,
             archive_threshold  = settings.trend_archive_threshold,
+            decay_rate_per_day = settings.trend_decay_rate_per_day,
+            boost_rate         = settings.trend_boost_rate,
         )
         for t in all_trends
         if not t.archived

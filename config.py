@@ -101,15 +101,39 @@ class Settings(BaseSettings):
     max_retries_per_node: int  = Field(default=2)     # failures before degraded mode
  
     # Trend node
-    trend_decay_rate:    float = Field(default=0.15)  # strength lost per run without reinforcement
-    trend_boost_rate:    float = Field(default=0.25)  # strength gained when reinforced
-    trend_archive_threshold: float = Field(default=0.1)  # archived below this strength
+    #
+    # Decay is calendar-time-based — elapsed days since the trend was last
+    # touched (boosted or decayed) × trend_decay_rate_per_day — not a flat
+    # amount per run. Topic rotation (topic_recency_window, default 30 days)
+    # guarantees long gaps between chances to reinforce a given trend, so
+    # decay has to be keyed to real elapsed time or it outpaces the rotation
+    # window and every trend gets archived before its topic is even eligible
+    # again. See strength.py for the calculation.
+    #
+    # 0.01/day means a never-reinforced trend takes ~90 days to fully decay
+    # to trend_archive_threshold, and a STRONG trend (0.65) survives one full
+    # topic_recency_window (30 days) idle and still stays above
+    # trend_active_min_strength below — i.e. rotation alone won't drop a
+    # trend out of "active" before it gets a chance to come back around.
+    trend_decay_rate_per_day: float = Field(default=0.01)  # strength lost per elapsed day without reinforcement
+    trend_boost_rate:        float = Field(default=0.25)   # strength gained when reinforced (instantaneous, not time-scaled)
+    trend_archive_threshold: float = Field(default=0.1)    # archived below this strength
+    trend_active_min_strength: float = Field(default=0.3)  # floor for a trend to count as "active" in get_active_trends — calibrated against trend_decay_rate_per_day above
  
     # Source reputation
     reputation_recency_weight: float = Field(default=0.2)  # how much a new article shifts domain score
 
-    # Topic rotation — how many recent topics to exclude from selection
-    topic_recency_window: int = Field(default=14)     # days
+    # Topic rotation — single source of truth for two things that must move
+    # together:
+    #   1. load_context.run() — days of RunRecord history fetched to build
+    #      recent_topics (the window a topic must clear before it's eligible
+    #      again).
+    #   2. trend/db_writer.py write_run_record — the RunRecord's DynamoDB TTL.
+    # The TTL must be >= the lookback window, or DynamoDB deletes records
+    # before load_context's query window has had a chance to read them,
+    # silently shrinking the effective lookback. Tying both to this one
+    # setting makes that impossible instead of relying on comments.
+    topic_recency_window: int = Field(default=30)     # days
 
     # -------------------------------------------------------------------------
     # Personal site publishing (S3 + CloudFront)

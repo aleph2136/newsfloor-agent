@@ -47,7 +47,7 @@ param(
 #   NEWSFLOOR_AWS_REGION               default: "us-east-1"
 #   NEWSFLOOR_STACK_NAME               default: "newsroom-agent"
 #   NEWSFLOOR_ENVIRONMENT              default: "prod"
-#   NEWSFLOOR_SCHEDULE                 default: "cron(0 12 * * ? *)"  (7am Eastern)
+#   NEWSFLOOR_SCHEDULE                 default: "cron(0 7 */2 * ? *)"  (7am UTC, every other day)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ $AWS_REGION             = Get-EnvVal "NEWSFLOOR_AWS_REGION"    "us-east-1"
 $SENDER_EMAIL           = Get-EnvVal "NEWSFLOOR_SENDER_EMAIL"
 $RECIPIENT_EMAIL        = Get-EnvVal "NEWSFLOOR_RECIPIENT_EMAIL"
 $SMTP_PASSWORD          = Get-EnvVal "NEWSFLOOR_SMTP_PASSWORD"
-$SCHEDULE               = Get-EnvVal "NEWSFLOOR_SCHEDULE"      "cron(0 7 * * ? *)"
+$SCHEDULE               = Get-EnvVal "NEWSFLOOR_SCHEDULE"      "cron(0 7 */2 * ? *)"
 $PERSONAL_SITE_BUCKET   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_BUCKET"
 $PERSONAL_SITE_CF_DIST  = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_CF_DIST_ID"
 $PERSONAL_SITE_DOMAIN   = Get-EnvVal "NEWSFLOOR_PERSONAL_SITE_DOMAIN"

@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from config import settings
 from contracts.primitives import RunStatus
 from contracts.state import RunRecord, SourceRecord, TrendRecord, ttl_days
 from data.db import DynamoDBService
@@ -188,7 +189,11 @@ def write_run_record(
             digest_summary      = task_input.digest_summary,
             orchestrator_notes  = notes,
             completed_at        = now,
-            ttl                 = ttl_days(30),
+            # Shares settings.topic_recency_window with load_context.run's
+            # get_recent_runs(days=...) call, which is what ages topics back
+            # into the rotation pool. Tied to the same setting rather than a
+            # literal so the two can't drift out of sync.
+            ttl                 = ttl_days(settings.topic_recency_window),
         )
         db.put_run_record(run_record)
         logger.info({

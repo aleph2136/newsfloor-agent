@@ -292,6 +292,21 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
                               the strategist can revisit any topic on the rotation list
       LOW_QUALITY_ARTICLES  — same as WEAK_TOPIC_SELECTION; articles scored poorly
                               against this topic, so a different topic is warranted
+
+    Hard recency filter
+    ────────────────────
+    The "TOPICS COVERED RECENTLY (avoid these)" prompt text is only a soft
+    instruction — the strategist is free to ignore it, and in practice it
+    competes against "favour topics that intersect active trends," which
+    pulls toward whatever was just covered (since covering a topic creates
+    or reinforces a trend in that same area). That combination is what let
+    the same topic repeat for several days in a row.
+
+    To make recency avoidance actually binding, recent_topics (and any
+    retry exclusions) are removed from available_topics here, in code,
+    before the prompt is ever built. If that empties the rotation list —
+    e.g. the lookback window covers the whole list — fall back to the
+    full list rather than leaving the strategist with nothing to choose.
     """
     available  = list(task_input.available_topics or AVAILABLE_TOPICS)
     recent     = list(task_input.recent_topics)
@@ -305,7 +320,6 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
         if reason in (RetryReasonCode.WEAK_TOPIC_SELECTION, RetryReasonCode.LOW_QUALITY_ARTICLES):
             previous_topic = params.get("previous_topic", "")
             if previous_topic:
-                available = [t for t in available if t != previous_topic]
                 exclusions.append(previous_topic)
 
         elif reason == RetryReasonCode.LOW_CONFIDENCE:
@@ -313,6 +327,13 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
             # The strategist had low confidence — broadening the candidate space
             # is more useful than avoiding repeats on this pass.
             recent = []
+
+    excluded = set(recent) | set(exclusions)
+    available_after_filter = [t for t in available if t not in excluded]
+    if available_after_filter:
+        available = available_after_filter
+    # else: recency window exhausted the rotation list — keep the full list
+    # so the crew still has candidates to choose from.
 
     return TopicPromptContext(
         available_topics        = available,

@@ -42,12 +42,14 @@ def _topic_input(
     retry: RetryInstruction | None = None,
     narrative: str = "",
 ) -> TopicTaskInput:
+    # `is None` (not `or`) so callers can pass an explicit empty list — `or`
+    # would silently fall back to the default since [] is falsy.
     return TopicTaskInput(
         run_id="test-run",
-        recent_topics=recent_topics or ["topic-a", "topic-b"],
+        recent_topics=recent_topics if recent_topics is not None else ["topic-a", "topic-b"],
         active_trend_names=["LLM Routing"],
         recent_signals=["signal-one"],
-        available_topics=available_topics or ["topic-a", "topic-b", "topic-c"],
+        available_topics=available_topics if available_topics is not None else ["topic-a", "topic-b", "topic-c"],
         recent_weekly_narrative=narrative,
         retry_instruction=retry,
     )
@@ -68,10 +70,29 @@ class TestTopicPromptContext:
         ctx = self._run_adjustments(inp)
         assert ctx.recent_topics == ["topic-a", "topic-b"]
 
-    def test_no_retry_returns_all_available_topics(self):
-        inp = _topic_input(available_topics=["topic-a", "topic-b", "topic-c"])
+    # Topic-repetition fix: recent_topics must be hard-filtered out of
+    # available_topics on the normal (non-retry) path too — the prompt's
+    # "avoid these" text alone was not reliably preventing repeat selections.
+    def test_no_retry_excludes_recent_topics_from_available(self):
+        inp = _topic_input(
+            available_topics=["topic-a", "topic-b", "topic-c"],
+            recent_topics=["topic-a", "topic-b"],
+        )
+        ctx = self._run_adjustments(inp)
+        assert ctx.available_topics == ["topic-c"]
+
+    def test_no_retry_keeps_full_list_when_nothing_recent(self):
+        inp = _topic_input(available_topics=["topic-a", "topic-b", "topic-c"], recent_topics=[])
         ctx = self._run_adjustments(inp)
         assert ctx.available_topics == ["topic-a", "topic-b", "topic-c"]
+
+    def test_no_retry_falls_back_to_full_list_when_recency_exhausts_rotation(self):
+        inp = _topic_input(
+            available_topics=["topic-a", "topic-b"],
+            recent_topics=["topic-a", "topic-b"],
+        )
+        ctx = self._run_adjustments(inp)
+        assert ctx.available_topics == ["topic-a", "topic-b"]
 
     def test_no_retry_returns_empty_exclusions(self):
         inp = _topic_input()
@@ -90,6 +111,7 @@ class TestTopicPromptContext:
     def test_weak_topic_selection_keeps_other_topics(self):
         inp = _topic_input(
             available_topics=["topic-a", "topic-b", "topic-c"],
+            recent_topics=[],  # isolate the retry-specific exclusion from the recency filter
             retry=_retry(RetryReasonCode.WEAK_TOPIC_SELECTION, {"previous_topic": "topic-a"}),
         )
         ctx = self._run_adjustments(inp)
@@ -140,6 +162,7 @@ class TestTopicPromptContext:
     def test_low_quality_articles_keeps_other_topics(self):
         inp = _topic_input(
             available_topics=["topic-a", "topic-b", "topic-c"],
+            recent_topics=[],  # isolate the retry-specific exclusion from the recency filter
             retry=_retry(RetryReasonCode.LOW_QUALITY_ARTICLES, {"previous_topic": "topic-b"}),
         )
         ctx = self._run_adjustments(inp)

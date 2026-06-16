@@ -46,7 +46,10 @@ def run() -> OrchestratorContext:
     db = DynamoDBService()
 
     # --- Active trends ---
-    trend_records = db.get_active_trends(min_strength=0.3)
+    # min_strength is settings.trend_active_min_strength rather than a literal
+    # here — it's calibrated against settings.trend_decay_rate_per_day (see
+    # config.py) so the two stay in sync if the decay rate is ever retuned.
+    trend_records = db.get_active_trends(min_strength=settings.trend_active_min_strength)
     active_trends = [_to_snapshot(t) for t in trend_records]
     logger.info(f"load_context: {len(active_trends)} active trends loaded")
 
@@ -56,11 +59,24 @@ def run() -> OrchestratorContext:
     source_last_contributed  = {s.domain: s.last_contributed_date for s in source_records if s.last_contributed_date}
     logger.info(f"load_context: {len(source_reputation_map)} source reputation scores loaded")
 
-    # --- Recent topics (last 30 days) ---
-    recent_runs = db.get_recent_runs(days=30)
+    # --- Recent topics (settings.topic_recency_window days) ---
+    # This window is what keeps the topic rotation from exhausting: a topic
+    # ages out of recent_topics — and becomes eligible again — once its run
+    # is older than the window. No separate replenishment step is needed
+    # because recent_topics is rebuilt fresh from this query every run
+    # rather than stored as a standing exclusion list.
+    #
+    # settings.topic_recency_window also sets the RunRecord TTL in
+    # trend/db_writer.py write_run_record — see that field's docstring in
+    # config.py for why the two must move together.
+    recent_runs = db.get_recent_runs(days=settings.topic_recency_window)
     recent_topics = [r.topic for r in recent_runs if r.topic]
 
     # --- Seen article IDs (last 14 days) for cross-run deduplication ---
+    # Filters client-side over recent_runs, so this window is implicitly
+    # capped by settings.topic_recency_window above — fine while that
+    # default is 30, but if it's ever lowered below 14 this dedup window
+    # will silently shrink to match it.
     cutoff = datetime.utcnow() - timedelta(days=14)
     seen_article_ids: list[str] = []
     for run in recent_runs:

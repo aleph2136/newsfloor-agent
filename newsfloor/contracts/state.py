@@ -147,31 +147,6 @@ class TrendRecord(BaseModel):
     archived_at:         str           = Field(default="")
     created_at:          str           = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at:          str           = Field(default_factory=lambda: datetime.utcnow().isoformat())
- 
-    def updated_strength(self, was_reinforced: bool) -> float:
-        """
-        Calculates the new strength score after a run.
-        Called by the Trend node — never by any spoke node.
- 
-        Decay:  -0.15 per run without reinforcement
-        Boost:  +0.25 per run with reinforcement
-        Bounds: clamped to [0.0, 1.0]
-        """
-        DECAY = 0.15
-        BOOST = 0.25
-        if was_reinforced:
-            return min(1.0, self.strength + BOOST)
-        return max(0.0, self.strength - DECAY)
- 
-    def to_band(self, strength: float) -> TrendStrength:
-        """Maps a strength float to its human-readable band."""
-        if strength >= 0.85:
-            return TrendStrength.DOMINANT
-        if strength >= 0.65:
-            return TrendStrength.STRONG
-        if strength >= 0.40:
-            return TrendStrength.GROWING
-        return TrendStrength.EMERGING
 
 # ---------------------------------------------------------------------------
 # Tier 3 — Source Reputation Records (Permanent)
