@@ -179,6 +179,17 @@ class TestTopicPromptContext:
         ctx = self._run_adjustments(inp)
         assert ctx.recent_weekly_narrative == ""
 
+    # Case-insensitive hard filter: recent_topics stored in title-case by the LLM
+    # must still be excluded from available_topics (which are all lowercase).
+    def test_hard_filter_case_insensitive_excludes_title_cased_recent_topics(self):
+        inp = _topic_input(
+            available_topics=["structured outputs and contract-driven agents", "agent memory architectures", "tool use and function calling patterns"],
+            recent_topics=["Structured Outputs and Contract-Driven Agents"],
+        )
+        ctx = self._run_adjustments(inp)
+        assert "structured outputs and contract-driven agents" not in ctx.available_topics
+        assert "agent memory architectures" in ctx.available_topics
+
 
 # ---------------------------------------------------------------------------
 # Issue 8 — Fence-stripping in scoring._parse_relevance_output
@@ -646,3 +657,59 @@ class TestNarrativeContractFields:
             ),
         )
         assert inp.recent_weekly_narrative == "Narrative here."
+
+
+# ---------------------------------------------------------------------------
+# Topic canonicalization — maps LLM title-cased output to canonical list string
+# ---------------------------------------------------------------------------
+
+CANONICAL_TOPICS = [
+    "structured outputs and contract-driven agents",
+    "agent memory architectures",
+    "tool use and function calling patterns",
+]
+
+
+def _make_result(topic: str) -> "TopicTaskResult":
+    from contracts.nodes import TopicTaskResult
+    return TopicTaskResult(
+        topic=topic,
+        focus_angle="some focus",
+        rationale="some rationale",
+        confidence=0.9,
+    )
+
+
+class TestTopicCanonicalization:
+
+    def _canonicalize(self, topic: str, available: list[str] | None = None):
+        from node_definitions.topic import _canonicalize_topic
+        result = _make_result(topic)
+        return _canonicalize_topic(result, available if available is not None else CANONICAL_TOPICS)
+
+    def test_title_case_maps_to_canonical_lowercase(self):
+        result = self._canonicalize("Structured Outputs and Contract-Driven Agents")
+        assert result.topic == "structured outputs and contract-driven agents"
+
+    def test_already_lowercase_passes_through_unchanged(self):
+        result = self._canonicalize("structured outputs and contract-driven agents")
+        assert result.topic == "structured outputs and contract-driven agents"
+
+    def test_mixed_case_with_extra_whitespace_is_normalized(self):
+        result = self._canonicalize("  AGENT MEMORY ARCHITECTURES  ")
+        assert result.topic == "agent memory architectures"
+
+    def test_no_match_returns_original_topic(self):
+        result = self._canonicalize("some topic not in the list")
+        assert result.topic == "some topic not in the list"
+
+    def test_no_match_preserves_other_fields(self):
+        result = self._canonicalize("unknown topic")
+        assert result.focus_angle == "some focus"
+        assert result.confidence == 0.9
+
+    def test_canonical_match_preserves_other_fields(self):
+        result = self._canonicalize("Tool Use and Function Calling Patterns")
+        assert result.topic == "tool use and function calling patterns"
+        assert result.focus_angle == "some focus"
+        assert result.confidence == 0.9

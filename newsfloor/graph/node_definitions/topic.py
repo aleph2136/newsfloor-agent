@@ -244,7 +244,8 @@ Return a JSON object with exactly these fields:
         raise RuntimeError("Topic crew produced no output")
 
     task_result: TopicTaskResult = _parse_topic_result(refine_task.output.raw)
- 
+    task_result = _canonicalize_topic(task_result, AVAILABLE_TOPICS)
+
     logger.info({
         "node":        "topic",
         "topic":       task_result.topic,
@@ -329,7 +330,8 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
             recent = []
 
     excluded = set(recent) | set(exclusions)
-    available_after_filter = [t for t in available if t not in excluded]
+    excluded_lower = {e.lower().strip() for e in excluded}
+    available_after_filter = [t for t in available if t.lower().strip() not in excluded_lower]
     if available_after_filter:
         available = available_after_filter
     # else: recency window exhausted the rotation list — keep the full list
@@ -343,3 +345,21 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
         recent_signals          = list(task_input.recent_signals),
         recent_weekly_narrative = getattr(task_input, "recent_weekly_narrative", ""),
     )
+
+
+def _canonicalize_topic(result: TopicTaskResult, available: list[str]) -> TopicTaskResult:
+    """
+    Maps the LLM's topic output to the exact string from the available topics list.
+
+    LLMs reliably use Title Case when naming topics (e.g. "Structured Outputs and
+    Contract-Driven Agents") even when the source list is lowercase. The hard filter
+    in _apply_retry_adjustments uses case-insensitive comparison now, but the RunRecord
+    also stores whatever string is returned here — so canonicalizing ensures future runs
+    load a topic string that matches the list exactly, not just case-insensitively.
+    """
+    lookup = {t.lower(): t for t in available}
+    canonical = lookup.get(result.topic.lower().strip())
+    if canonical:
+        return result.model_copy(update={"topic": canonical})
+    logger.warning({"action": "topic_canonicalize_failed", "llm_topic": result.topic})
+    return result
