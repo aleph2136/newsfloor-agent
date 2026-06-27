@@ -190,6 +190,30 @@ class TestTopicPromptContext:
         assert "structured outputs and contract-driven agents" not in ctx.available_topics
         assert "agent memory architectures" in ctx.available_topics
 
+    # INSUFFICIENT_ARTICLES retry: the input supervisor sends this when too few
+    # articles passed scoring. topic_node must exclude the previous topic so the
+    # LLM picks a different one on the retry pass. Bug: this case was missing from
+    # _apply_retry_adjustments, causing the same topic to be re-selected every retry.
+    def test_insufficient_articles_excludes_previous_topic(self):
+        inp = _topic_input(
+            available_topics=["topic-a", "topic-b", "topic-c"],
+            recent_topics=[],
+            retry=_retry(RetryReasonCode.INSUFFICIENT_ARTICLES, {"previous_topic": "topic-a"}),
+        )
+        ctx = self._run_adjustments(inp)
+        assert "topic-a" not in ctx.available_topics
+        assert "topic-a" in ctx.exclusions
+
+    def test_insufficient_articles_keeps_other_topics(self):
+        inp = _topic_input(
+            available_topics=["topic-a", "topic-b", "topic-c"],
+            recent_topics=[],
+            retry=_retry(RetryReasonCode.INSUFFICIENT_ARTICLES, {"previous_topic": "topic-a"}),
+        )
+        ctx = self._run_adjustments(inp)
+        assert "topic-b" in ctx.available_topics
+        assert "topic-c" in ctx.available_topics
+
 
 # ---------------------------------------------------------------------------
 # Issue 8 — Fence-stripping in scoring._parse_relevance_output

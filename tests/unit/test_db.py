@@ -120,3 +120,107 @@ class TestTryClaimRun:
             result = DynamoDBService().try_claim_run("2026-06-14")
 
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# get_recent_runs — status filter regression tests
+#
+# Root cause of topic repetition: the filter used "complete" (no 'd') but
+# RunStatus.COMPLETED.value == "completed". Every successful run was silently
+# excluded from recent_topics, making the exclusion list effectively empty.
+# These tests pin the exact status values included/excluded so a future typo
+# or enum rename is caught immediately.
+# ---------------------------------------------------------------------------
+
+def _scan_filter_values(mock_table: MagicMock) -> list[str]:
+    """
+    Extracts the list of status values from the DynamoDB scan FilterExpression.
+
+    The expression is structured as an And(In(..., [values]), Gte(...)):
+      filter_expr._values == (In_condition, Gte_condition)
+      In_condition._values == (Attr("status"), [list_of_statuses])
+    """
+    kwargs = mock_table.scan.call_args[1]
+    filter_expr = kwargs["FilterExpression"]
+    # _values[0] is the In(...) condition; _values[1] is the list of status strings
+    status_condition = filter_expr._values[0]
+    return list(status_condition._values[1])
+
+
+class TestGetRecentRuns:
+
+    @patch("data.db.boto3")
+    def test_filter_includes_completed_status(self, mock_boto3):
+        mock_boto3, mock_table = _patched_db()
+        mock_table.scan.return_value = {"Items": []}
+        with patch("data.db.boto3", mock_boto3):
+            DynamoDBService().get_recent_runs(days=30)
+        values = _scan_filter_values(mock_table)
+        assert RunStatus.COMPLETED.value in values, (
+            f"'completed' must be in the filter — got {values}"
+        )
+
+    @patch("data.db.boto3")
+    def test_filter_includes_completed_with_warnings_status(self, mock_boto3):
+        mock_boto3, mock_table = _patched_db()
+        mock_table.scan.return_value = {"Items": []}
+        with patch("data.db.boto3", mock_boto3):
+            DynamoDBService().get_recent_runs(days=30)
+        values = _scan_filter_values(mock_table)
+        assert RunStatus.COMPLETED_WITH_WARNINGS.value in values, (
+            f"'completed_with_warnings' must be in the filter — got {values}"
+        )
+
+    @patch("data.db.boto3")
+    def test_filter_includes_degraded_status(self, mock_boto3):
+        mock_boto3, mock_table = _patched_db()
+        mock_table.scan.return_value = {"Items": []}
+        with patch("data.db.boto3", mock_boto3):
+            DynamoDBService().get_recent_runs(days=30)
+        values = _scan_filter_values(mock_table)
+        assert RunStatus.DEGRADED.value in values, (
+            f"'degraded' must be in the filter — got {values}"
+        )
+
+    @patch("data.db.boto3")
+    def test_filter_excludes_in_progress(self, mock_boto3):
+        mock_boto3, mock_table = _patched_db()
+        mock_table.scan.return_value = {"Items": []}
+        with patch("data.db.boto3", mock_boto3):
+            DynamoDBService().get_recent_runs(days=30)
+        values = _scan_filter_values(mock_table)
+        assert RunStatus.IN_PROGRESS.value not in values, (
+            f"'in_progress' must NOT be in the filter — got {values}"
+        )
+
+    @patch("data.db.boto3")
+    def test_filter_excludes_failed(self, mock_boto3):
+        mock_boto3, mock_table = _patched_db()
+        mock_table.scan.return_value = {"Items": []}
+        with patch("data.db.boto3", mock_boto3):
+            DynamoDBService().get_recent_runs(days=30)
+        values = _scan_filter_values(mock_table)
+        assert RunStatus.FAILED.value not in values, (
+            f"'failed' must NOT be in the filter — got {values}"
+        )
+
+    @patch("data.db.boto3")
+    def test_returns_records_with_completed_status(self, mock_boto3):
+        """
+        A run stored with status='completed' must be returned by get_recent_runs.
+        This is the direct regression test for the 'complete' vs 'completed' typo.
+        """
+        mock_boto3, mock_table = _patched_db()
+        from datetime import datetime, timezone, timedelta
+        completed_item = {
+            "run_id": "2026-06-23",
+            "status": RunStatus.COMPLETED.value,
+            "topic": "structured outputs and contract-driven agents",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "ttl": 9999999999,
+        }
+        mock_table.scan.return_value = {"Items": [completed_item]}
+        with patch("data.db.boto3", mock_boto3):
+            results = DynamoDBService().get_recent_runs(days=30)
+        assert len(results) == 1
+        assert results[0].topic == "structured outputs and contract-driven agents"

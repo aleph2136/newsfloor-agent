@@ -22,6 +22,7 @@ from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
  
 from config import settings
+from contracts.primitives import RunStatus
 from contracts.state import (
     RunRecord,
     WeeklySynthesis,
@@ -71,7 +72,11 @@ class DynamoDBService:
         try:
             response = self._runs.scan(
                 FilterExpression=(
-                    Attr("status").is_in(["complete", "degraded"]) &
+                    Attr("status").is_in([
+                        RunStatus.COMPLETED.value,
+                        RunStatus.COMPLETED_WITH_WARNINGS.value,
+                        RunStatus.DEGRADED.value,
+                    ]) &
                     Attr("run_id").gte(cutoff)
                 )
             )

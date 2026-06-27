@@ -318,7 +318,11 @@ def _apply_retry_adjustments(task_input: TopicTaskInput) -> TopicPromptContext:
         reason = instruction.reason_code
         params = instruction.parameter_adjustment
 
-        if reason in (RetryReasonCode.WEAK_TOPIC_SELECTION, RetryReasonCode.LOW_QUALITY_ARTICLES):
+        if reason in (
+            RetryReasonCode.WEAK_TOPIC_SELECTION,
+            RetryReasonCode.LOW_QUALITY_ARTICLES,
+            RetryReasonCode.INSUFFICIENT_ARTICLES,
+        ):
             previous_topic = params.get("previous_topic", "")
             if previous_topic:
                 exclusions.append(previous_topic)
