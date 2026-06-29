@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     trend_decay_rate_per_day: float = Field(default=0.01)  # strength lost per elapsed day without reinforcement
     trend_boost_rate:        float = Field(default=0.25)   # strength gained when reinforced (instantaneous, not time-scaled)
     trend_archive_threshold: float = Field(default=0.1)    # archived below this strength
-    trend_active_min_strength: float = Field(default=0.3)  # floor for a trend to count as "active" in get_active_trends — calibrated against trend_decay_rate_per_day above
+    trend_active_min_strength: float = Field(default=0.2)  # floor for a trend to count as "active" in get_active_trends — must be below trend_boost_rate (0.25) so newly created trends are immediately visible
  
     # Source reputation
     reputation_recency_weight: float = Field(default=0.2)  # how much a new article shifts domain score

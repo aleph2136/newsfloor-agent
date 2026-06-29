@@ -129,6 +129,21 @@ def test_decay_calibration_matches_designed_timeline(starting_strength, idle_day
     assert result == pytest.approx(expected_strength), scenario
 
 
+def test_new_trend_initial_strength_is_above_active_min_threshold():
+    """
+    A brand-new trend is created with strength = trend_boost_rate (0.25).
+    That value must be above trend_active_min_strength so the trend is
+    immediately visible in get_active_trends. If this fails, newly created
+    trends will never appear in load_context's active_trends list.
+    """
+    initial_strength = settings.trend_boost_rate
+    assert initial_strength > settings.trend_active_min_strength, (
+        f"New trends start at {initial_strength} but active threshold is "
+        f"{settings.trend_active_min_strength} — newly created trends are "
+        f"immediately invisible. Lower trend_active_min_strength below {initial_strength}."
+    )
+
+
 def test_decay_calibration_strong_trend_stays_active_through_one_rotation_window():
     """
     A STRONG trend (0.65) idle for one full topic_recency_window (30 days)
